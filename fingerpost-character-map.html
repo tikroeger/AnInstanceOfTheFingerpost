@@ -1,0 +1,630 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fingerpost Character Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IM+Fell+English:ital@0;1&family=Alegreya:ital@0;1&family=Alegreya+Sans:ital,wght@0,400;0,500;0,700;1,400&display=swap">
+<style>
+/* Layout: the four narrators' worlds as the four quadrants of one pannable map;
+   Sarah Blundy and the death of Dr Grove sit at the crossing. Single light theme on purpose:
+   the book colours are ink colours (black, dark blue, green, red) and need a pale ground. */
+:root {
+  --paper: #e7eae2;
+  --sheet: #fcfcf9;
+  --ink: #23261f;
+  --muted: #5d6458;
+  --rule: #c3c8bb;
+  --mark: #f4e6a3;
+  --b1: #141414;
+  --b2: #1c3b8f;
+  --b3: #12703a;
+  --b4: #b42318;
+  --display: "IM Fell English", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  --body: "Alegreya Sans", "Gill Sans", "Segoe UI", system-ui, sans-serif;
+  --source: "Alegreya", "Iowan Old Style", Georgia, serif;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--paper); color: var(--ink);
+  font-family: var(--body); font-size: 14px; line-height: 1.4;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--b2); outline-offset: 2px; }
+
+/* ---------- top bar ---------- */
+.bar {
+  flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px;
+  padding: calc(10px + env(safe-area-inset-top, 0px)) 16px 10px;
+  background: var(--sheet); border-bottom: 1px solid var(--rule); position: relative; z-index: 5;
+}
+.brand { display: flex; flex-direction: column; min-width: 0; }
+.brand h1 { margin: 0; font-family: var(--display); font-weight: 400; font-size: 23px; line-height: 1.05; letter-spacing: .01em; }
+.brand small { color: var(--muted); font-size: 12px; }
+.books { display: flex; flex-wrap: wrap; gap: 6px; }
+.book {
+  display: inline-flex; align-items: center; gap: 7px; padding: 5px 10px 5px 7px;
+  border: 1px solid var(--rule); border-radius: 4px; background: var(--sheet); cursor: pointer;
+  font-size: 12.5px; line-height: 1.15; text-align: left;
+}
+.book .sw { width: 22px; height: 22px; border-radius: 50%; background: var(--c); color: #fff;
+  display: grid; place-items: center; font-family: var(--display); font-size: 14px; flex: none; }
+.book b { font-weight: 700; color: var(--c); }
+.book span.t { display: block; color: var(--muted); font-style: italic; font-size: 11.5px; }
+.book[aria-pressed="false"] { opacity: .42; }
+.book[aria-pressed="false"] .sw { background: transparent; color: var(--c); border: 1.5px dashed var(--c); }
+.tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-left: auto; }
+.tools select, .btn {
+  height: 32px; border: 1px solid var(--rule); border-radius: 4px; background: var(--sheet);
+  padding: 0 10px; font-size: 13px; cursor: pointer;
+}
+.btn.icon { width: 32px; padding: 0; font-size: 17px; line-height: 1; }
+.btn.load { border-color: var(--ink); }
+.btn.load.ok { border-color: var(--b3); color: var(--b3); }
+.hint { flex-basis: 100%; color: var(--muted); font-size: 12px; margin-top: -4px; }
+.hint kbd { font-family: var(--body); font-size: 11px; border: 1px solid var(--rule); border-bottom-width: 2px; border-radius: 3px; padding: 0 4px; background: var(--sheet); }
+
+/* ---------- map ---------- */
+#viewport { flex: 1; position: relative; overflow: hidden; touch-action: none; cursor: grab; }
+#viewport.panning { cursor: grabbing; }
+#world { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+#edges { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+#edges .hit { stroke: transparent; stroke-width: 12; pointer-events: stroke; cursor: pointer; fill: none; }
+#edges line.s { stroke-width: 1.7; stroke-linecap: round; opacity: .34; transition: opacity .15s, stroke-width .15s; }
+#edges g.on line.s { opacity: 1; stroke-width: 2.6; }
+#edges g.dim line.s { opacity: .06; }
+#edges g.hover line.s { opacity: 1; stroke-width: 3; }
+#edges .lbl { font-family: var(--body); font-size: 12px; font-style: italic; fill: var(--ink); paint-order: stroke; stroke: var(--paper); stroke-width: 4px; stroke-linejoin: round; display: none; }
+#edges g.on .lbl { display: block; }
+.axis { position: absolute; background: var(--rule); opacity: .7; }
+.wm { position: absolute; font-family: var(--display); font-style: italic; color: var(--c); opacity: .2; font-size: 118px; line-height: .95; white-space: nowrap; pointer-events: none; }
+.wm small { display: block; font-style: normal; font-size: 40px; margin-top: 10px; }
+
+.card {
+  position: absolute; background: var(--sheet); border: 1px solid var(--rule); border-radius: 3px;
+  padding: 10px 12px 11px; box-shadow: 0 1px 0 rgba(30,35,25,.06);
+  transition: opacity .15s;
+}
+.card.S { width: 214px; } .card.M { width: 262px; } .card.L { width: 318px; }
+.card.narrator { border: 1px solid var(--c); outline: 1px solid var(--c); outline-offset: 3px; }
+.card.event { background: var(--paper); border: 1.5px dashed var(--ink); }
+.card.sel { box-shadow: 0 0 0 3px var(--mark), 0 0 0 4px var(--ink); }
+.card.dim { opacity: .22; }
+.card.off { opacity: .3; }
+.card .nm {
+  display: block; width: 100%; text-align: left; background: none; border: 0; padding: 0; cursor: pointer;
+  font-family: var(--display); font-size: 18px; line-height: 1.12; text-wrap: balance;
+}
+.card.L .nm { font-size: 22px; } .card.S .nm { font-size: 16.5px; }
+.card .nm:hover { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.card .aka { font-family: var(--display); font-style: italic; font-size: 14px; color: var(--muted); }
+.card .role { display: block; color: var(--muted); font-size: 11.5px; letter-spacing: .06em; text-transform: uppercase; margin-top: 2px; }
+.card .nar { display: inline-block; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: #fff; background: var(--c); padding: 1px 6px; border-radius: 2px; margin-top: 4px; }
+.named { display: flex; gap: 8px; align-items: baseline; margin-top: 5px; font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.named i { font-style: normal; font-weight: 700; }
+.facts { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 3px; border-top: 1px solid var(--rule); padding-top: 7px; }
+.fact {
+  display: grid; grid-template-columns: 15px 1fr; gap: 6px; width: 100%; text-align: left;
+  background: none; border: 0; padding: 2px 3px; margin: 0 -3px; border-radius: 2px; cursor: pointer;
+  color: var(--c); font-size: 12.5px; line-height: 1.32;
+}
+.fact .n { font-family: var(--display); font-size: 12px; line-height: 15px; width: 15px; height: 15px; border-radius: 50%; border: 1px solid var(--c); display: grid; place-items: center; margin-top: 1px; }
+.fact:hover, .fact.cur { background: var(--mark); }
+.fact[hidden] { display: none; }
+
+/* ---------- side panel ---------- */
+#panel {
+  position: absolute; right: 0; top: 0; bottom: 0; width: min(410px, 100%); z-index: 4;
+  background: var(--sheet); border-left: 1px solid var(--rule); overflow-y: auto; padding: 16px 18px 28px;
+  box-shadow: -8px 0 24px rgba(30,35,25,.08);
+}
+#panel .x { position: absolute; right: 10px; top: 10px; }
+#panel h2 { font-family: var(--display); font-weight: 400; font-size: 30px; line-height: 1.05; margin: 0 40px 2px 0; text-wrap: balance; }
+#panel .sub { color: var(--muted); font-size: 13px; }
+#panel h3 { font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 18px 0 6px; font-weight: 700; }
+.bars { display: grid; grid-template-columns: auto 1fr auto; gap: 4px 8px; align-items: center; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.bars .tr { height: 7px; background: var(--paper); border-radius: 4px; overflow: hidden; }
+.bars .tr div { height: 100%; background: var(--c); }
+.grp { margin-bottom: 10px; }
+.grp h4 { margin: 10px 0 4px; font-family: var(--display); font-weight: 400; font-size: 16px; color: var(--c); }
+.rel { border-top: 1px solid var(--rule); padding: 8px 0 6px; }
+.rel .who { background: none; border: 0; padding: 0; cursor: pointer; font-family: var(--display); font-size: 17px; text-align: left; }
+.rel .who:hover { text-decoration: underline; }
+.rel .lb { color: var(--muted); font-style: italic; font-size: 13px; }
+.note { color: var(--muted); font-size: 12px; margin-top: 16px; }
+
+/* ---------- popover ---------- */
+#pop {
+  position: fixed; z-index: 10; width: min(460px, calc(100vw - 24px)); max-height: min(70vh, 640px); overflow-y: auto;
+  background: var(--sheet); border: 1px solid var(--ink); border-radius: 4px; padding: 13px 15px 14px;
+  box-shadow: 0 10px 30px rgba(20,25,15,.22);
+}
+#pop .hd { display: flex; align-items: center; gap: 8px; padding-right: 26px; }
+#pop .chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--c); }
+#pop .chip .sw { width: 18px; height: 18px; border-radius: 50%; background: var(--c); color: #fff; display: grid; place-items: center; font-family: var(--display); font-weight: 400; font-size: 12px; }
+#pop .loc { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+#pop .who { font-family: var(--display); font-size: 15px; margin-top: 6px; }
+#pop .claim { color: var(--c); font-size: 14.5px; line-height: 1.35; margin: 4px 0 10px; }
+#pop .src { font-family: var(--source); font-size: 15px; line-height: 1.5; border-left: 3px solid var(--c); padding: 2px 0 2px 12px; color: var(--ink); white-space: pre-wrap; }
+#pop .src.none { font-family: var(--body); font-size: 13px; color: var(--muted); border-left-color: var(--rule); white-space: normal; }
+#pop .src.none button { margin-top: 8px; }
+#pop .x { position: absolute; right: 6px; top: 6px; width: 26px; height: 26px; border: 0; background: none; cursor: pointer; font-size: 18px; color: var(--muted); }
+#pop .back { background: none; border: 0; padding: 0; cursor: pointer; color: var(--muted); font-size: 12.5px; margin-bottom: 6px; }
+#pop .elist { display: flex; flex-direction: column; gap: 3px; margin-top: 8px; }
+#pop .ehead { font-family: var(--display); font-size: 18px; }
+#pop .ehead em { font-family: var(--body); font-size: 13px; color: var(--muted); }
+
+#drop { position: fixed; inset: 0; z-index: 20; background: rgba(231,234,226,.92); display: grid; place-items: center; font-family: var(--display); font-size: 30px; border: 4px dashed var(--ink); }
+#toast { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 15; background: var(--ink); color: var(--sheet); padding: 9px 14px; border-radius: 4px; font-size: 13px; max-width: calc(100vw - 32px); }
+
+@media (max-width: 760px) {
+  .brand h1 { font-size: 20px; }
+  .book span.t { display: none; }
+  .tools { margin-left: 0; }
+  #panel { top: auto; height: 58%; width: 100%; border-left: 0; border-top: 1px solid var(--rule); }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<header class="bar">
+  <div class="brand">
+    <h1>Fingerpost Character Map</h1>
+    <small>Iain Pears, <i>An Instance of the Fingerpost</i> &middot; four narrators, one cast</small>
+  </div>
+  <div class="books" id="books" aria-label="Show or hide each narrative"></div>
+  <div class="tools">
+    <label for="jump" class="sr" hidden>Go to character</label>
+    <select id="jump" aria-label="Go to character"><option value="">Go to character&hellip;</option></select>
+    <button class="btn load" id="loadBtn" type="button" title="Open your copy of the book (ch1.xhtml or the .epub) to show original paragraphs">Open your book file</button>
+    <input type="file" id="file" accept=".epub,.xhtml,.html,.htm,application/epub+zip,application/xhtml+xml,text/html" hidden>
+    <button class="btn icon" id="zout" type="button" aria-label="Zoom out">&minus;</button>
+    <button class="btn icon" id="zin" type="button" aria-label="Zoom in">+</button>
+    <button class="btn" id="fit" type="button">Fit</button>
+  </div>
+  <div class="hint">Every coloured line is clickable: it opens where that piece comes from, with the original paragraph once your book file is open. Click a name for everything about that person. Drag to pan; scroll, pinch or <kbd>+</kbd><kbd>&minus;</kbd> to zoom. Click a book to hide or show it.</div>
+</header>
+<main id="viewport" aria-label="Character map">
+  <div id="world">
+    <svg id="edges" xmlns="http://www.w3.org/2000/svg"></svg>
+  </div>
+  <aside id="panel" hidden aria-live="polite"></aside>
+</main>
+<div id="pop" hidden role="dialog" aria-label="Source"></div>
+<div id="drop" hidden>Drop the book file to load its paragraphs</div>
+<div id="toast" hidden></div>
+
+<script>
+const DATA = {"nodes":[{"id":"cola","kind":"char","short":"Cola","name":"Marco da Cola","aka":"really Andrea da Cola","role":"Narrator, Book 1","group":"narrator","size":"L","x":640,"y":420,"narrator":1,"facts":[{"b":1,"t":"Presents himself as a Venetian merchant's son and amateur physician, sent to rescue his father's London business.","r":{"c":1,"p":2,"h":"6db129f5"}},{"b":1,"t":"Says he landed in London on 22 March 1663 and went on to Oxford with five pounds to his name.","r":{"c":1,"p":8,"h":"0c8fb871"}},{"b":1,"t":"Claims the idea of blood transfusion as his own and says Lower stole the credit.","r":{"c":7,"p":1,"h":"3ea087ba"}},{"b":1,"t":"Leaves England sure that Sarah was a murderess and Lower a false friend.","r":{"c":18,"p":96,"h":"cf61ca99"}},{"b":2,"t":"Was already a guest of Sir William Compton before his 'arrival' in Oxford, so his own account of his journey is false.","r":{"c":12,"p":54,"h":"cfe1e071"}},{"b":2,"t":"Tells Jack he knew Sir James Prestcott from the Venetian service.","r":{"c":13,"p":6,"h":"65b52dd3"}},{"b":3,"t":"Wallis takes him for a soldier and hired killer, sent with Spanish backing to murder Lord Clarendon.","r":{"c":10,"p":64,"h":"8eda572d"}},{"b":3,"t":"Arrested in Whitehall; Wallis is assured he was thrown overboard on the voyage home.","r":{"c":14,"p":1,"h":"934ee22d"}},{"b":4,"t":"Wood unmasks him: his real name is Andrea, a Jesuit priest. Marco, the soldier, was his dead brother.","r":{"c":12,"p":20,"h":"38f83dd4"}},{"b":4,"t":"His real errand was to receive Charles II secretly into the Catholic Church. The memoir exists to prove that 'Marco' was the one in England.","r":{"c":12,"p":62,"h":"58a65866"}}],"mentions":[50,50,204,135]},{"id":"prestcott","kind":"char","short":"Jack","name":"Jack Prestcott","aka":null,"role":"Narrator, Book 2","group":"narrator","size":"L","x":3560,"y":420,"narrator":2,"facts":[{"b":1,"t":"A student held in Oxford castle for attacking a gentleman; refuses Lower's request for his corpse.","r":{"c":5,"p":27,"h":"1d889a18"}},{"b":1,"t":"Escapes jail dressed in Dr Wallis's cloak and hat after tying him up.","r":{"c":9,"p":3,"h":"feae0957"}},{"b":1,"t":"Hiding at Thurloe's, he gives Cola the story of Grove's signet ring found on Sarah.","r":{"c":15,"p":80,"h":"e92681fa"}},{"b":2,"t":"Devotes himself to clearing his father's name and recovering the family land.","r":{"c":3,"p":1,"h":"d0e14095"}},{"b":2,"t":"Rapes Sarah in Christ Church meadow, then becomes convinced she has bewitched him.","r":{"c":8,"p":30,"h":"9f01dd62"}},{"b":2,"t":"Stabs his guardian Sir William Compton, believing he is a demon in disguise.","r":{"c":13,"p":46,"h":"fc52a6dd"}},{"b":2,"t":"Finds Grove dying, covers for his friend Ken, and takes Grove's ring to frame Sarah.","r":{"c":14,"p":50,"h":"1d4249bc"}},{"b":2,"t":"Ends his tale as a rich MP in a great house he built.","r":{"c":1,"p":7,"h":"edd7b69b"}},{"b":3,"t":"Trades testimony for his freedom; when told his father's real crime, he goes violently mad.","r":{"c":11,"p":114,"h":"356aab74"}},{"b":4,"t":"Wood reveals that the great house is Bedlam, where he lives caged.","r":{"c":1,"p":2,"h":"189ee736"}}],"mentions":[50,46,95,76]},{"id":"wallis","kind":"char","short":"Wallis","name":"Dr John Wallis","aka":null,"role":"Narrator, Book 3","group":"narrator","size":"L","x":3560,"y":2760,"narrator":3,"facts":[{"b":1,"t":"Cold and rude to Cola at the New College dinner, refusing even to return his bow.","r":{"c":8,"p":4,"h":"33d8e001"}},{"b":1,"t":"Goes to visit Prestcott in jail in Grove's place and is found tied up in the cell.","r":{"c":9,"p":5,"h":"e348726d"}},{"b":2,"t":"Savilian Professor of Geometry and codebreaker who once read the King's letters for Thurloe.","r":{"c":7,"p":24,"h":"2f99bef2"}},{"b":3,"t":"Runs a secret network against plotters for Bennet, while presenting himself as a servant of order.","r":{"c":1,"p":5,"h":"58d12da1"}},{"b":3,"t":"Builds a theory that Cola is a Spanish-backed assassin and pursues it relentlessly.","r":{"c":2,"p":1,"h":"a9a76bb4"}},{"b":3,"t":"Lets Sarah hang, though he believes her innocent, in exchange for Prestcott's testimony.","r":{"c":11,"p":34,"h":"e5029d43"}},{"b":3,"t":"Learns from Cola's memoir that the man he ordered drowned is alive; doubts his own salvation.","r":{"c":14,"p":9,"h":"6e1221ae"}},{"b":4,"t":"Wood: undone by his own cleverness; saw enemies everywhere and was fooled by Thurloe and Bennet.","r":{"c":2,"p":63,"h":"b6e34ef3"}}],"mentions":[19,56,18,83]},{"id":"wood","kind":"char","short":"Wood","name":"Anthony Wood","aka":null,"role":"Narrator, Book 4","group":"narrator","size":"L","x":640,"y":2760,"narrator":4,"facts":[{"b":1,"t":"A shabby, gloomy antiquary who eats the scraps off other men's plates.","r":{"c":12,"p":60,"h":"88b2095e"}},{"b":1,"t":"The only person to rise in Sarah's defence at her trial, and is jeered down.","r":{"c":17,"p":37,"h":"95e6bd02"}},{"b":1,"t":"Takes Cola's pound to give Anne Blundy a decent burial.","r":{"c":18,"p":98,"h":"aa039fcd"}},{"b":2,"t":"A twitching bookworm whom Jack finds ridiculous but uses for research.","r":{"c":6,"p":4,"h":"47106565"}},{"b":2,"t":"Jack feeds him the slander about Grove and Sarah, knowing he will spread it.","r":{"c":9,"p":30,"h":"99bf6e81"}},{"b":3,"t":"Wallis uses him to track down the 1634 Leiden edition of Livy.","r":{"c":3,"p":55,"h":"f12de93a"}},{"b":4,"t":"Loved Sarah. In a fit of spite he tipped Grove's own arsenic purgative into his brandy.","r":{"c":5,"p":43,"h":"8ce4b739"}},{"b":4,"t":"Tries to confess to the magistrate and to Wallis; neither will listen.","r":{"c":10,"p":82,"h":"5d27953f"}},{"b":4,"t":"Sees Sarah return to life and believes she is the Messiah reborn.","r":{"c":11,"p":135,"h":"f4645db3"}},{"b":4,"t":"Decodes Bennet's letter about the King's conversion and resolves to burn his papers.","r":{"c":12,"p":78,"h":"c9a004f5"}}],"mentions":[43,31,12,51]},{"id":"sarah","kind":"char","short":"Sarah","name":"Sarah Blundy","aka":null,"role":"Servant, healer, prophetess","group":"blundy","size":"L","x":2100,"y":1880,"narrator":null,"facts":[{"b":1,"t":"Proud and insolent; offers herself to Cola as payment for treating her mother.","r":{"c":4,"p":34,"h":"538d378b"}},{"b":1,"t":"Gives her blood to her mother in the first transfusion.","r":{"c":11,"p":33,"h":"e7b49d08"}},{"b":1,"t":"Pleads guilty to poisoning Grove; is hanged, and her body goes to Lower.","r":{"c":17,"p":30,"h":"adb6ebc2"}},{"b":2,"t":"Jack calls her a harlot and witch who cursed him, yet states plainly she did not kill Grove.","r":{"c":1,"p":8,"h":"004821ed"}},{"b":2,"t":"Ken says she is an important figure at Tidmarsh's Quaker meetings.","r":{"c":6,"p":77,"h":"fee9d2d6"}},{"b":3,"t":"Wallis is sure she carries messages to radicals for Cola; she will not say where she goes.","r":{"c":11,"p":28,"h":"62543aee"}},{"b":4,"t":"Preaches in trance at secret meetings in Abingdon and heals by touch.","r":{"c":6,"p":63,"h":"052b2020"}},{"b":4,"t":"The night Grove died she was in Wood's bed.","r":{"c":6,"p":84,"h":"d8aa8190"}},{"b":4,"t":"Revives on Lower's dissecting table, escapes England, and vanishes from a becalmed ship.","r":{"c":11,"p":206,"h":"5b2294a5"}}],"mentions":[65,22,12,163]},{"id":"anne","kind":"char","short":"Anne","name":"Anne Blundy","aka":null,"role":"Washerwoman, Sarah's mother","group":"blundy","size":"M","x":1640,"y":2020,"narrator":null,"facts":[{"b":1,"t":"Cola's patient with a shattered leg; wise and gentle beyond her station.","r":{"c":2,"p":38,"h":"63a4a230"}},{"b":1,"t":"Dies crying out Sarah's name at the moment Sarah is hanged.","r":{"c":18,"p":29,"h":"80db2bce"}},{"b":2,"t":"A cunning woman who shows Jack visions in a bowl of water.","r":{"c":4,"p":15,"h":"ba741839"}},{"b":3,"t":"Wallis recounts her rallying the defenders at the siege of Gloucester.","r":{"c":8,"p":6,"h":"bd719bd9"}},{"b":4,"t":"Her leg was broken by a man from Thurloe's office searching her house.","r":{"c":4,"p":68,"h":"0f89ced9"}},{"b":4,"t":"Sarah was born while Ned was at war; a dove in a dream told her the child's name.","r":{"c":10,"p":29,"h":"019aee2c"}}],"mentions":[75,8,8,53]},{"id":"ned","kind":"char","short":"Ned","name":"Ned Blundy","aka":null,"role":"Leveller soldier, Sarah's father in name","group":"blundy","size":"M","x":2560,"y":2020,"narrator":null,"facts":[{"b":1,"t":"Known in Oxford as a notorious radical agitator.","r":{"c":3,"p":75,"h":"060fcfe7"}},{"b":2,"t":"Probably the trusted companion who rode with Sir James to Jack's mother in 1660.","r":{"c":9,"p":77,"h":"1faeb0d7"}},{"b":3,"t":"Thurloe's courier, who passed state secrets to Sir James Prestcott.","r":{"c":11,"p":45,"h":"ed535d64"}},{"b":3,"t":"Died at Deal taking Sir James's sword thrust meant for the King.","r":{"c":11,"p":57,"h":"9046be3a"}},{"b":4,"t":"Left Sarah a sealed packet of documents that could topple the Crown.","r":{"c":3,"p":17,"h":"aee75093"}},{"b":4,"t":"Not Sarah's natural father: she was born while he was away.","r":{"c":10,"p":23,"h":"0407ebaf"}}],"mentions":[4,5,9,14]},{"id":"grove","kind":"char","short":"Grove","name":"Dr Robert Grove","aka":null,"role":"Fellow of New College","group":"oxford","size":"L","x":2100,"y":1100,"narrator":null,"facts":[{"b":1,"t":"Turns Sarah away in the coffee house; Cola washes the dog-dung remedy out of his eye.","r":{"c":7,"p":22,"h":"6e2cc928"}},{"b":1,"t":"Baits Cola at dinner, picks up a bottle on his stair, and is found dead the next morning.","r":{"c":9,"p":27,"h":"7db6fce1"}},{"b":2,"t":"Jack's old tutor at Compton Wynyates; teaches him to reason his troubles out by logic.","r":{"c":10,"p":185,"h":"dfe4d149"}},{"b":2,"t":"Refuses to perform an exorcism for Jack.","r":{"c":10,"p":220,"h":"b72b2f4f"}},{"b":2,"t":"Ken's rival for the living of Easton Parva.","r":{"c":3,"p":40,"h":"473fd561"}},{"b":3,"t":"Wallis's neighbour and sparring partner; died drinking brandy Wallis thinks was meant for himself.","r":{"c":8,"p":79,"h":"01e8a4d0"}},{"b":4,"t":"Cruelly mocks Wood over Sarah and threatens to ruin him.","r":{"c":5,"p":33,"h":"ff13c7bb"}}],"mentions":[127,84,35,48]},{"id":"lower","kind":"char","short":"Lower","name":"Dr Richard Lower","aka":null,"role":"Physician & anatomist","group":"oxford","size":"L","x":1180,"y":840,"narrator":null,"facts":[{"b":1,"t":"Cola's first friend in Oxford: generous, ambitious, and given to sudden rages.","r":{"c":3,"p":39,"h":"81902212"}},{"b":1,"t":"Performs the first transfusion with Cola.","r":{"c":11,"p":42,"h":"34263814"}},{"b":1,"t":"For the second he brings a drunk donor, then never comes at all.","r":{"c":18,"p":15,"h":"cafdde82"}},{"b":1,"t":"Hacks up the hanged body he claims is Sarah's, and later publishes transfusion without naming Cola.","r":{"c":18,"p":93,"h":"65871ef9"}},{"b":2,"t":"Now the Prestcott family's doctor; he sends Jack's and Wallis's manuscripts on.","r":{"c":1,"p":1,"h":"e22debab"}},{"b":3,"t":"Wallis poisons his trust in Cola with an invented tale of stolen experiments.","r":{"c":8,"p":54,"h":"19680dbf"}},{"b":4,"t":"Finds Sarah alive on his table, fakes the dissection with another corpse, and gets her away.","r":{"c":11,"p":126,"h":"e619f5a4"}},{"b":4,"t":"Sends Wood the three manuscripts.","r":{"c":1,"p":1,"h":"2d804739"}}],"mentions":[304,10,34,128]},{"id":"boyle","kind":"char","short":"Boyle","name":"Robert Boyle","aka":null,"role":"Natural philosopher","group":"oxford","size":"M","x":1500,"y":470,"narrator":null,"facts":[{"b":1,"t":"Takes Cola into his laboratory on Sylvius's recommendation and lets him use the air pump.","r":{"c":3,"p":92,"h":"2d5d639e"}},{"b":3,"t":"Wallis lays his case against Cola before him; Boyle refuses to act as informer.","r":{"c":8,"p":29,"h":"115cc9a7"}},{"b":4,"t":"Once asked Sarah for her herbal recipes; she had none, because she healed by touch.","r":{"c":6,"p":56,"h":"e136a515"}}],"mentions":[89,1,18,31]},{"id":"locke","kind":"char","short":"Locke","name":"John Locke","aka":null,"role":"Physician, later philosopher","group":"oxford","size":"M","x":1180,"y":1300,"narrator":null,"facts":[{"b":1,"t":"Supercilious and calculating; Cola does not like him.","r":{"c":12,"p":154,"h":"d88006b0"}},{"b":1,"t":"Looks after Anne Blundy while Cola is away.","r":{"c":16,"p":40,"h":"62e738a5"}},{"b":4,"t":"Notices Sarah breathing and stops Lower from killing her.","r":{"c":11,"p":84,"h":"891317ab"}},{"b":4,"t":"Argues she was sentenced to be hanged, not hanged until dead.","r":{"c":11,"p":100,"h":"88899f07"}}],"mentions":[47,0,3,32]},{"id":"ken","kind":"char","short":"Ken","name":"Thomas Ken","aka":null,"role":"Fellow of New College, later bishop","group":"oxford","size":"M","x":2640,"y":1180,"narrator":null,"facts":[{"b":1,"t":"Trades Bible verses with Grove at dinner and storms out quoting Romans 8:13.","r":{"c":8,"p":41,"h":"f6f43de0"}},{"b":2,"t":"Jack's only friend; lends him his last three pounds for the quest.","r":{"c":3,"p":66,"h":"39de89f2"}},{"b":2,"t":"Jack is convinced Ken poisoned Grove: Romans 8:13 says those who live by the flesh shall die.","r":{"c":1,"p":8,"h":"004821ed"}},{"b":3,"t":"Wallis promised him support for the living of Easton Parva.","r":{"c":4,"p":35,"h":"352b9e35"}},{"b":2,"t":"Admits to Jack he lied to the Warden that he saw Sarah slip into Grove's room.","r":{"c":14,"p":29,"h":"cde21d5d"}},{"b":4,"t":"Wood's viol partner, and a dreadful player.","r":{"c":2,"p":71,"h":"0bc091c5"}},{"b":4,"t":"Wood is shocked to learn he invented the tale that put Sarah in Grove's room.","r":{"c":2,"p":71,"h":"0bc091c5"}},{"b":4,"t":"Saw Prestcott escape and stayed silent, letting Sarah hang rather than risk his living.","r":{"c":8,"p":7,"h":"d219382e"}}],"mentions":[25,85,12,25]},{"id":"stahl","kind":"char","short":"Stahl","name":"Peter Stahl","aka":null,"role":"German chemist","group":"oxford","size":"S","x":1560,"y":1150,"narrator":null,"facts":[{"b":1,"t":"Proves the sediment in Grove's brandy behaves like white arsenic, and kills two cats doing it.","r":{"c":14,"p":86,"h":"6a731e61"}}],"mentions":[25,0,1,3]},{"id":"crosse","kind":"char","short":"Crosse","name":"Mr Crosse","aka":null,"role":"Apothecary, Boyle's landlord","group":"oxford","size":"S","x":1800,"y":760,"narrator":null,"facts":[{"b":1,"t":"His ledger shows Sarah bought arsenic the day Grove dismissed her; he takes it to the magistrate.","r":{"c":14,"p":222,"h":"2fd7a6e0"}},{"b":1,"t":"Guards the door while Lower works on the supposed corpse.","r":{"c":18,"p":67,"h":"e04500e7"}}],"mentions":[25,0,0,2]},{"id":"woodward","kind":"char","short":"Woodward","name":"Warden Woodward","aka":null,"role":"Warden of New College","group":"oxford","size":"S","x":2520,"y":760,"narrator":null,"facts":[{"b":1,"t":"Insists Grove died of a seizure and resists the magistrate at the graveside.","r":{"c":14,"p":10,"h":"026fea8a"}},{"b":3,"t":"Wallis has him call in Lower to examine the body.","r":{"c":9,"p":79,"h":"dbef21b5"}}],"mentions":[51,14,10,0]},{"id":"fulgrove","kind":"char","short":"Fulgrove","name":"Sir John Fulgrove","aka":null,"role":"Oxford magistrate","group":"oxford","size":"S","x":1500,"y":2420,"narrator":null,"facts":[{"b":1,"t":"Stops Grove's funeral, briefly suspects Cola, then builds the case against Sarah.","r":{"c":14,"p":8,"h":"cfbcbdd5"}},{"b":3,"t":"Arrests Sarah at Wallis's word.","r":{"c":11,"p":2,"h":"b595d091"}},{"b":4,"t":"Brushes off Wood's confession as a lover's lie.","r":{"c":10,"p":82,"h":"5d27953f"}}],"mentions":[45,10,8,13]},{"id":"wren","kind":"char","short":"Wren","name":"Christopher Wren","aka":null,"role":"Astronomer & architect","group":"oxford","size":"S","x":1000,"y":140,"narrator":null,"facts":[{"b":1,"t":"Cola scorns his architecture, then finds him transfusing dogs in secret with Lower and Locke.","r":{"c":16,"p":105,"h":"ef25883a"}},{"b":3,"t":"Wallis is dining with him when news of Matthew's death arrives.","r":{"c":7,"p":20,"h":"f13ba342"}}],"mentions":[15,0,5,1]},{"id":"bulstrode","kind":"char","short":"Mrs Bulstrode","name":"Mrs Bulstrode","aka":null,"role":"Cola's landlady","group":"oxford","size":"S","x":230,"y":1000,"narrator":null,"facts":[{"b":1,"t":"Her boiled brawn and beer make Cola ill.","r":{"c":4,"p":2,"h":"4a7b4b46"}},{"b":4,"t":"Lets Wood into Cola's room, where he finds holy oil, a relic and two copies of Livy.","r":{"c":8,"p":50,"h":"c3ebfb6d"}}],"mentions":[2,0,0,3]},{"id":"fullerton","kind":"char","short":"Mary Fullerton","name":"Mary Fullerton","aka":null,"role":"Market girl","group":"oxford","size":"S","x":2900,"y":1600,"narrator":null,"facts":[{"b":1,"t":"Witness that Grove groped her, mistaking her for Sarah.","r":{"c":17,"p":13,"h":"503b4799"}},{"b":2,"t":"Jack paid her to tell that story.","r":{"c":9,"p":30,"h":"99bf6e81"}}],"mentions":[2,0,0,0]},{"id":"tidmarsh","kind":"char","short":"Tidmarsh","name":"Old Tidmarsh","aka":null,"role":"Quaker preacher","group":"oxford","size":"S","x":3050,"y":1300,"narrator":null,"facts":[{"b":2,"t":"His meeting is raided; Jack catches Ken fleeing through the window.","r":{"c":6,"p":22,"h":"7ee8d19e"}},{"b":3,"t":"Wallis knows Sarah attended his conventicle.","r":{"c":10,"p":27,"h":"ec3c5da1"}}],"mentions":[0,3,1,0]},{"id":"aylesbury","kind":"char","short":"the Aylesbury woman","name":"The Aylesbury woman","aka":null,"role":"Hanged for killing her rapist","group":"oxford","size":"S","x":560,"y":1320,"narrator":null,"facts":[{"b":1,"t":"Lower buys her corpse after her hanging and pickles it.","r":{"c":15,"p":3,"h":"c12efef3"}},{"b":4,"t":"Her body is cut up in place of Sarah's.","r":{"c":11,"p":141,"h":"04d7fe2f"}}],"mentions":null},{"id":"giovanni","kind":"char","short":"Giovanni","name":"Giovanni da Cola","aka":null,"role":"Venetian merchant, the father","group":"venice","size":"S","x":150,"y":160,"narrator":null,"facts":[{"b":1,"t":"Prosperous trader into England who wants his sons to be gentlemen.","r":{"c":1,"p":3,"h":"14e540dc"}},{"b":3,"t":"A London merchant tells Wallis the business is failing, yet the son roams Europe unmarried.","r":{"c":5,"p":31,"h":"96bdeb64"}}],"mentions":[26,0,0,0]},{"id":"marco","kind":"char","short":"Marco","name":"Marco da Cola","aka":"the soldier","role":"Andrea's brother","group":"venice","size":"S","x":150,"y":650,"narrator":null,"facts":[{"b":3,"t":"A merchant ships a wounded, drunken scout called Marco Cola home from the siege of Candia.","r":{"c":2,"p":77,"h":"b0638967"}},{"b":4,"t":"Died in his brother's arms after Crete.","r":{"c":12,"p":22,"h":"ab706591"}}],"mentions":null},{"id":"dipietro","kind":"char","short":"di Pietro","name":"Giovanni di Pietro","aka":null,"role":"The Colas' London agent","group":"venice","size":"S","x":560,"y":60,"narrator":null,"facts":[{"b":1,"t":"Died suddenly before Cola reached London.","r":{"c":1,"p":9,"h":"2ac8ae29"}},{"b":3,"t":"Killed by Cooth during a burglary Wallis ordered to get his mailbag.","r":{"c":2,"p":86,"h":"99b7ee77"}}],"mentions":[3,0,16,0]},{"id":"mansion","kind":"char","short":"Mansion","name":"John Mansion","aka":null,"role":"English partner","group":"venice","size":"S","x":960,"y":-120,"narrator":null,"facts":[{"b":1,"t":"Seizes the Colas' London business with forged papers and sends thugs after Cola.","r":{"c":1,"p":9,"h":"2ac8ae29"}},{"b":3,"t":"Wallis notes the partner was happy to inherit the business.","r":{"c":2,"p":87,"h":"557dc399"}}],"mentions":[6,0,0,0]},{"id":"sylvius","kind":"char","short":"Sylvius","name":"Dr Sylvius","aka":null,"role":"Leiden professor","group":"venice","size":"S","x":1500,"y":-120,"narrator":null,"facts":[{"b":1,"t":"Cola's anatomy teacher; his letter to Boyle calls Cola impetuous and argumentative.","r":{"c":3,"p":62,"h":"b918d2a9"}},{"b":3,"t":"Writes that Cola is coming to England on urgent business.","r":{"c":5,"p":51,"h":"7f0bab38"}}],"mentions":[8,0,5,0]},{"id":"sirjames","kind":"char","short":"Sir James","name":"Sir James Prestcott","aka":null,"role":"Royalist officer, Jack's father","group":"prestcott","size":"L","x":2950,"y":330,"narrator":null,"facts":[{"b":1,"t":"Lower says he was a traitor who escaped overseas ahead of arrest.","r":{"c":5,"p":56,"h":"c3b606c6"}},{"b":2,"t":"Jack's heroic, wronged father, accused of betraying the 1659 rising; died in a pauper's grave.","r":{"c":2,"p":11,"h":"f9a480ec"}},{"b":2,"t":"Fought for Venice at the siege of Candia during his exile.","r":{"c":2,"p":9,"h":"e402ff57"}},{"b":2,"t":"Jack's mother blames him for ruining the family for honour's sake.","r":{"c":9,"p":54,"h":"08ba752c"}},{"b":3,"t":"Thurloe: he tried to kill Charles II at Deal in 1660; the treason story was a cover.","r":{"c":11,"p":52,"h":"40f164c2"}},{"b":4,"t":"Wood: a secret Catholic convert who corresponded with the Jesuit Andrea da Cola.","r":{"c":9,"p":6,"h":"3648f73a"}}],"mentions":[0,115,18,11]},{"id":"compton","kind":"char","short":"Compton","name":"Sir William Compton","aka":null,"role":"Jack's guardian, Master of the Ordnance","group":"prestcott","size":"M","x":3380,"y":980,"narrator":null,"facts":[{"b":2,"t":"Raised Jack at Compton Wynyates and first spread the charge against Sir James.","r":{"c":10,"p":208,"h":"13d72247"}},{"b":2,"t":"As trustee he let the entailed estate be sold to cover Sir James's debts.","r":{"c":12,"p":73,"h":"1dfd1a97"}},{"b":2,"t":"Stabbed by Jack and nearly dies.","r":{"c":13,"p":51,"h":"555fbbb9"}},{"b":3,"t":"Wallis reads his joke about Clarendon and highwaymen as evidence of a plot.","r":{"c":9,"p":62,"h":"d855b296"}}],"mentions":[0,92,33,5]},{"id":"jackmother","kind":"char","short":"Jack's mother","name":"Jack's mother","aka":null,"role":"Lady Prestcott","group":"prestcott","size":"S","x":4020,"y":120,"narrator":null,"facts":[{"b":2,"t":"Lives on her brother's charity and no longer defends her husband.","r":{"c":9,"p":40,"h":"0035b693"}},{"b":2,"t":"Tells Jack of Sir James's last visit with a man perhaps called Ned, and a packet that never came.","r":{"c":9,"p":75,"h":"cb5e40a0"}}],"mentions":[0,14,0,0]},{"id":"uncle","kind":"char","short":"Jack's uncle","name":"Jack's uncle","aka":null,"role":"His mother's brother","group":"prestcott","size":"S","x":4020,"y":520,"narrator":null,"facts":[{"b":2,"t":"Bought the Prestcott estate; Jack takes twenty pounds from his strongbox.","r":{"c":9,"p":90,"h":"d56ecd62"}},{"b":4,"t":"Collects Jack in chains from the Oxford jail.","r":{"c":11,"p":22,"h":"33bb1ea0"}}],"mentions":[0,23,0,0]},{"id":"mordaunt","kind":"char","short":"Mordaunt","name":"Lord Mordaunt","aka":null,"role":"Royalist conspirator","group":"prestcott","size":"M","x":2560,"y":-60,"narrator":null,"facts":[{"b":2,"t":"Receives Jack at Windsor and tells him Sir James betrayed the 1659 rising.","r":{"c":4,"p":83,"h":"9967dffc"}},{"b":2,"t":"Jack concludes Mordaunt was the real traitor, working with Morland.","r":{"c":15,"p":72,"h":"ce697761"}},{"b":3,"t":"Thurloe: he did betray the rising, on the King's own orders.","r":{"c":10,"p":96,"h":"d3d154b2"}}],"mentions":[0,41,15,1]},{"id":"morland","kind":"char","short":"Morland","name":"Sir Samuel Morland","aka":null,"role":"Inventor, once Thurloe's clerk","group":"prestcott","size":"M","x":3380,"y":-60,"narrator":null,"facts":[{"b":2,"t":"Shows Jack his calculating machine and pumps; owns Harland Wyte, Jack's family land.","r":{"c":11,"p":54,"h":"28494cd8"}},{"b":2,"t":"Jack concludes his greed for the fen land made Sir James the scapegoat.","r":{"c":15,"p":79,"h":"b4684d77"}},{"b":3,"t":"Brought Wallis the uncrackable Prestcott letter in 1660; forged letters for Thurloe.","r":{"c":4,"p":14,"h":"55878372"}}],"mentions":[0,69,29,0]},{"id":"russell","kind":"char","short":"Russell","name":"Sir John Russell","aka":null,"role":"Royalist, Bedford family","group":"prestcott","size":"S","x":3950,"y":860,"narrator":null,"facts":[{"b":2,"t":"Has Jack thrown out at Tunbridge Wells as the son of a traitor.","r":{"c":5,"p":18,"h":"752a424c"}},{"b":2,"t":"Passed Morland's papers to Compton, clearing the fens for his family.","r":{"c":10,"p":216,"h":"903cbe96"}}],"mentions":[0,22,0,0]},{"id":"collop","kind":"char","short":"Collop","name":"George Collop","aka":null,"role":"Duke of Bedford's steward","group":"prestcott","size":"S","x":3950,"y":1180,"narrator":null,"facts":[{"b":2,"t":"Explains over wine how Sir James's fall cleared the way to drain the fens.","r":{"c":11,"p":196,"h":"05ee343b"}}],"mentions":[0,12,0,0]},{"id":"kitty","kind":"char","short":"Kitty","name":"Kitty","aka":"Katherine Hannay","role":"Whore turned mistress","group":"prestcott","size":"M","x":3950,"y":1500,"narrator":null,"facts":[{"b":2,"t":"A young whore Jack protects on the road to Tunbridge Wells.","r":{"c":5,"p":2,"h":"04ae8ee8"}},{"b":2,"t":"Now Lord Bristol's mistress in London, she passes Jack his lord's hints about Mordaunt.","r":{"c":11,"p":91,"h":"3eebc1e0"}},{"b":2,"t":"Begs him to keep her past secret; years later he betrays it to her fiancé.","r":{"c":11,"p":148,"h":"b6b825cd"}},{"b":3,"t":"Prestcott names her as his source, which leads Wallis to Bristol.","r":{"c":11,"p":91,"h":"94f1930a"}}],"mentions":[0,14,3,0]},{"id":"greatorex","kind":"char","short":"Greatorex","name":"Valentine Greatorex","aka":null,"role":"Irish astrologer & healer","group":"prestcott","size":"M","x":1020,"y":2380,"narrator":null,"facts":[{"b":2,"t":"Casts Jack's horoscope: bewitched, warned off Sarah, and born under the stars of Judas.","r":{"c":10,"p":98,"h":"516773d9"}},{"b":3,"t":"A drunken magus Wallis has to persuade to leave Oxford.","r":{"c":2,"p":83,"h":"f8702ba5"}},{"b":4,"t":"Followed the stars to Sarah and knelt for her blessing; told her she would die.","r":{"c":10,"p":38,"h":"47deb3f5"}},{"b":4,"t":"Consoles Wood on the night before the hanging.","r":{"c":11,"p":28,"h":"db003bbd"}}],"mentions":[0,15,3,8]},{"id":"maynard","kind":"char","short":"Maynard","name":"Lord Maynard","aka":null,"role":"Patron of Easton Parva","group":"oxford","size":"S","x":2900,"y":820,"narrator":null,"facts":[{"b":2,"t":"The living Ken and Grove fight over is in his gift.","r":{"c":3,"p":40,"h":"473fd561"}}],"mentions":[0,5,3,0]},{"id":"thurloe","kind":"char","short":"Thurloe","name":"John Thurloe","aka":null,"role":"Cromwell's spymaster","group":"court","size":"L","x":3380,"y":1900,"narrator":null,"facts":[{"b":1,"t":"A meek-looking man Wood calls Europe's foremost murderer; shelters Prestcott at Great Milton.","r":{"c":15,"p":16,"h":"2d47f6c9"}},{"b":2,"t":"Jack comes to kill him; Thurloe stages a mock trial and talks him round.","r":{"c":15,"p":60,"h":"23bce1c0"}},{"b":3,"t":"Steers Wallis into letting Sarah hang so that Ned's documents stay hidden.","r":{"c":11,"p":77,"h":"59db9e4d"}},{"b":3,"t":"Reveals the secret restoration talks and the attack on the King at Deal.","r":{"c":10,"p":90,"h":"a7984a1a"}},{"b":4,"t":"Wood thinks him perhaps the most powerful man in the kingdom even out of office.","r":{"c":9,"p":4,"h":"bfdc4c0d"}}],"mentions":[25,64,51,17]},{"id":"bennet","kind":"char","short":"Bennet","name":"Henry Bennet","aka":"Lord Arlington","role":"Secretary of State","group":"court","size":"L","x":2900,"y":2360,"narrator":null,"facts":[{"b":3,"t":"Wallis's patron; within days of Wallis naming Matthew to him, Matthew is dead.","r":{"c":6,"p":118,"h":"4fdf0d83"}},{"b":3,"t":"Allies with Clarendon to bring Lord Bristol down.","r":{"c":12,"p":17,"h":"5533b4aa"}},{"b":4,"t":"A secret Catholic who wrote the coded letter summoning Andrea da Cola.","r":{"c":12,"p":75,"h":"ed3d9f56"}},{"b":4,"t":"Wood suspects he ordered Matthew's murder.","r":{"c":12,"p":79,"h":"981e9e58"}}],"mentions":[0,0,103,13]},{"id":"clarendon","kind":"char","short":"Clarendon","name":"Earl of Clarendon","aka":null,"role":"Lord Chancellor","group":"court","size":"M","x":2520,"y":2700,"narrator":null,"facts":[{"b":2,"t":"Sir William Compton's enemy, encroaching on Compton country.","r":{"c":13,"p":39,"h":"5144dd3d"}},{"b":3,"t":"Wallis warns him he is the assassin's target.","r":{"c":12,"p":44,"h":"b471111b"}},{"b":3,"t":"Joins Bennet in goading Bristol into ruin.","r":{"c":12,"p":104,"h":"1c6b19bb"}}],"mentions":[0,26,80,7]},{"id":"bristol","kind":"char","short":"Bristol","name":"Earl of Bristol","aka":null,"role":"Catholic courtier","group":"court","size":"M","x":3200,"y":3120,"narrator":null,"facts":[{"b":2,"t":"Kitty's keeper, who hints to Jack that Mordaunt was the traitor.","r":{"c":11,"p":102,"h":"d8dc44a8"}},{"b":3,"t":"Wallis concludes he hired Cola to kill Clarendon.","r":{"c":11,"p":101,"h":"5f44de54"}},{"b":3,"t":"Tries to impeach Clarendon, fails, and is exiled.","r":{"c":14,"p":1,"h":"934ee22d"}}],"mentions":[0,3,34,3]},{"id":"king","kind":"char","short":"the King","name":"Charles II","aka":null,"role":"King of England","group":"court","size":"M","x":2560,"y":1600,"narrator":null,"facts":[{"b":1,"t":"Lower: a lover of learning, when his mistresses allow.","r":{"c":3,"p":43,"h":"0b99cd90"}},{"b":2,"t":"Jack's ideal of loyalty, for whom his father supposedly gave everything.","r":{"c":2,"p":7,"h":"40517a65"}},{"b":3,"t":"Wounded at Deal by Sir James and saved by Ned Blundy; secretly ordered Mordaunt's betrayal.","r":{"c":11,"p":55,"h":"41b06910"}},{"b":4,"t":"Secretly asked to be received into the Catholic Church in 1663.","r":{"c":12,"p":76,"h":"44c6a794"}}],"mentions":[21,80,113,37]},{"id":"matthew","kind":"char","short":"Matthew","name":"Matthew","aka":null,"role":"Wallis's servant","group":"wallis","size":"M","x":4020,"y":2300,"narrator":null,"facts":[{"b":1,"t":"Cola describes beating off hired thugs his first night in London.","r":{"c":1,"p":11,"h":"0fc6482a"}},{"b":3,"t":"The servant Wallis loved like a son and trained as a spy.","r":{"c":2,"p":12,"h":"fd314fb1"}},{"b":3,"t":"Charmed by Cola in The Hague; quarrels with Wallis and is found with his throat cut.","r":{"c":7,"p":19,"h":"2c3bf75e"}},{"b":4,"t":"Wood saw Wallis's obsession with the boy, and how harshly he treated him.","r":{"c":2,"p":65,"h":"0a493b07"}}],"mentions":[0,0,64,3]},{"id":"cooth","kind":"char","short":"Cooth","name":"John Cooth","aka":null,"role":"Housebreaker","group":"wallis","size":"S","x":4020,"y":2700,"narrator":null,"facts":[{"b":3,"t":"Wallis's thug; kills di Pietro while stealing his mailbag.","r":{"c":2,"p":84,"h":"333701a6"}},{"b":4,"t":"Wood suspects he, not Cola, cut Matthew's throat.","r":{"c":12,"p":79,"h":"981e9e58"}}],"mentions":[0,0,5,1]},{"id":"williams","kind":"char","short":"Williams","name":"Mr Williams","aka":null,"role":"London merchant","group":"wallis","size":"S","x":4020,"y":3050,"narrator":null,"facts":[{"b":3,"t":"Tells Wallis the house of Cola is close to ruin; trades tips with him.","r":{"c":2,"p":41,"h":"a43ce4b8"}}],"mentions":[0,0,11,0]},{"id":"bushrod","kind":"char","short":"Bushrod","name":"Andrew Bushrod","aka":null,"role":"Merchant in the Fleet prison","group":"wallis","size":"S","x":3600,"y":3300,"narrator":null,"facts":[{"b":3,"t":"Ran the blockade to Candia and carried the wounded soldier Marco Cola home.","r":{"c":2,"p":71,"h":"ce718bb1"}}],"mentions":[0,0,7,0]},{"id":"jackson","kind":"char","short":"Jackson","name":"Thomas Jackson","aka":null,"role":"Picture dealer","group":"wallis","size":"S","x":2900,"y":3330,"narrator":null,"facts":[{"b":3,"t":"Reports from Venice that Cola's elder brother Andrea is a priest close to the papal court.","r":{"c":2,"p":5,"h":"58eabf03"}}],"mentions":[0,0,2,0]},{"id":"moledi","kind":"char","short":"de Moledi","name":"Señor de Moledi","aka":null,"role":"Spanish envoy in London","group":"wallis","size":"S","x":2350,"y":3150,"narrator":null,"facts":[{"b":3,"t":"Wallis hints to him of a Spanish plot; he complains to Bennet.","r":{"c":6,"p":97,"h":"1cd65c05"}}],"mentions":[0,0,10,0]},{"id":"gamarra","kind":"char","short":"Gamarra","name":"Esteban de Gamarra","aka":null,"role":"Spanish ambassador, The Hague","group":"wallis","size":"S","x":4020,"y":1880,"narrator":null,"facts":[{"b":3,"t":"The coded letter for Cola was delivered at his embassy.","r":{"c":3,"p":39,"h":"cdcc07d2"}}],"mentions":[0,0,2,0]},{"id":"oldenburg","kind":"char","short":"Oldenburg","name":"Henry Oldenburg","aka":null,"role":"Royal Society secretary","group":"wallis","size":"S","x":2050,"y":3300,"narrator":null,"facts":[{"b":3,"t":"Mentions Sylvius's letter about a promising young Venetian.","r":{"c":5,"p":42,"h":"5d298d43"}}],"mentions":[0,0,9,0]},{"id":"mrswood","kind":"char","short":"Mrs Wood","name":"Mrs Wood","aka":null,"role":"Wood's mother","group":"wood","size":"S","x":200,"y":2250,"narrator":null,"facts":[{"b":1,"t":"Brings Sarah her meals in prison.","r":{"c":16,"p":65,"h":"5698bbe1"}},{"b":2,"t":"Sarah works in her house on Merton Street.","r":{"c":7,"p":34,"h":"e4e62716"}},{"b":4,"t":"Her swollen ankle healed at Sarah's touch; she hides Sarah after the hanging.","r":{"c":6,"p":58,"h":"7d72469f"}}],"mentions":[0,0,0,34]},{"id":"thomaslower","kind":"char","short":"Thomas Lower","name":"Thomas Lower","aka":null,"role":"Lower's Quaker brother","group":"wood","size":"S","x":1100,"y":3150,"narrator":null,"facts":[{"b":4,"t":"Takes Sarah to Plymouth and puts her on a ship for America.","r":{"c":11,"p":205,"h":"20940bb9"}}],"mentions":[0,0,1,6]},{"id":"aubrey","kind":"char","short":"Aubrey","name":"John Aubrey","aka":null,"role":"Antiquary & gossip","group":"wood","size":"S","x":150,"y":3100,"narrator":null,"facts":[{"b":4,"t":"Saw Bennet leading Cola to the King's private apartments.","r":{"c":12,"p":47,"h":"018a378a"}}],"mentions":[0,0,1,3]},{"id":"tanner","kind":"char","short":"Tanner","name":"Mr Tanner","aka":null,"role":"Wood's executor","group":"wood","size":"S","x":600,"y":3300,"narrator":null,"facts":[{"b":4,"t":"Charged with burning Wood's secret papers when he dies.","r":{"c":12,"p":74,"h":"f0ac122d"}}],"mentions":[0,0,0,3]},{"id":"e_grove","kind":"event","short":"Grove's death","name":"Who killed Dr Grove?","aka":null,"role":"Four narrators, four answers","group":"event","size":"L","x":2100,"y":1480,"narrator":null,"facts":[{"b":1,"t":"Sarah Blundy: she bought arsenic, was seen at the college, had his ring, and confessed.","r":{"c":16,"p":127,"h":"6234cc75"}},{"b":2,"t":"Thomas Ken, over the living of Easton Parva. Sarah was innocent.","r":{"c":1,"p":8,"h":"004821ed"}},{"b":3,"t":"Cola, with poison meant for Wallis. Grove drank Wallis's brandy by mistake.","r":{"c":1,"p":1,"h":"5305cc20"}},{"b":4,"t":"Wood himself, by tipping Grove's arsenic purgative into his brandy out of spite.","r":{"c":5,"p":45,"h":"75ecf9ad"}}],"mentions":null},{"id":"e_blood","kind":"event","short":"the transfusion","name":"The transfusion","aka":null,"role":"Whose idea was it?","group":"event","size":"M","x":1180,"y":1700,"narrator":null,"facts":[{"b":1,"t":"Cola's idea, carried out with Lower: Sarah's blood into her dying mother.","r":{"c":11,"p":35,"h":"c0223d71"}},{"b":1,"t":"Cola's second transfusion, using his own blood, fails as Sarah hangs.","r":{"c":18,"p":21,"h":"22c053b7"}},{"b":3,"t":"Wallis invents a story that Cola steals other men's discoveries about blood.","r":{"c":8,"p":54,"h":"19680dbf"}},{"b":4,"t":"Wood: each man had half the idea; their meeting produced it.","r":{"c":7,"p":13,"h":"494d93f2"}}],"mentions":null},{"id":"e_cipher","kind":"event","short":"the cipher","name":"The Livy cipher & Ned's packet","aka":null,"role":"The secret both sides hunt","group":"event","size":"M","x":1640,"y":2820,"narrator":null,"facts":[{"b":2,"t":"Jack steals a folder of coded letters from Wallis's desk.","r":{"c":14,"p":10,"h":"b22e34b3"}},{"b":3,"t":"A 1634 Leiden Livy is the key to both the 1660 Prestcott letter and the letter to Cola.","r":{"c":4,"p":33,"h":"598694e5"}},{"b":3,"t":"Thurloe: Ned Blundy's documents could have won Sir James an earldom.","r":{"c":11,"p":71,"h":"513d85a6"}},{"b":4,"t":"Wood had the packet, the Livy and the letters all along, and decodes them.","r":{"c":12,"p":64,"h":"e27edfea"}}],"mentions":null}],"rels":[{"a":"cola","b":"sarah","l":"treats the mother of","ev":false,"c":[{"b":1,"t":"She offers herself as payment; he recoils in fury and later decides she is evil and guilty.","r":{"c":4,"p":35,"h":"57a09600"}},{"b":4,"t":"Wood saw him recoil from her in horror at himself, as a priest would.","r":{"c":4,"p":48,"h":"4797dc03"}}]},{"a":"cola","b":"anne","l":"is the physician of","ev":false,"c":[{"b":1,"t":"Treats her leg for nothing and transfuses her twice.","r":{"c":2,"p":49,"h":"f19bec8b"}},{"b":4,"t":"Wood watched him secretly anoint her with holy oil, then search the house.","r":{"c":4,"p":30,"h":"a8a21607"}}]},{"a":"cola","b":"lower","l":"befriends, then breaks with","ev":false,"c":[{"b":1,"t":"Close friendship broken by Lower's rages and the stolen transfusion.","r":{"c":15,"p":95,"h":"ef56f8f9"}},{"b":3,"t":"Wallis sets Lower against him.","r":{"c":8,"p":54,"h":"19680dbf"}},{"b":4,"t":"Lower believed Cola's theories killed Anne.","r":{"c":11,"p":165,"h":"e4079dc7"}}]},{"a":"cola","b":"boyle","l":"assists","ev":false,"c":[{"b":1,"t":"Boyle takes him on as assistant.","r":{"c":3,"p":92,"h":"2d5d639e"}},{"b":4,"t":"Boyle grew fond of him despite Wallis's warnings.","r":{"c":4,"p":9,"h":"f3c0c9a6"}}]},{"a":"cola","b":"prestcott","l":"meets in jail and in hiding","ev":false,"c":[{"b":1,"t":"Brings him wine in jail; later carries his story about the ring to the magistrate.","r":{"c":15,"p":51,"h":"e14f097e"}},{"b":2,"t":"Jack met him first at Compton Wynyates and used him to plant the lie about Sarah.","r":{"c":15,"p":140,"h":"b0d996a9"}},{"b":3,"t":"Wallis grills Jack about why Cola visited him.","r":{"c":9,"p":28,"h":"0c45f182"}}]},{"a":"cola","b":"wallis","l":"is hunted by","ev":false,"c":[{"b":1,"t":"Wallis snubs him at dinner.","r":{"c":8,"p":4,"h":"33d8e001"}},{"b":3,"t":"Wallis hunts him, catches him in Whitehall and has him shipped off to be drowned.","r":{"c":13,"p":29,"h":"6f7c0372"}},{"b":4,"t":"Wood: Wallis was wrong; Cola never threatened the kingdom.","r":{"c":1,"p":4,"h":"90bc34aa"}}]},{"a":"cola","b":"wood","l":"is unmasked by","ev":false,"c":[{"b":1,"t":"Wood quizzes him on heresy; Cola tells him of the prophetess Prisca.","r":{"c":12,"p":107,"h":"bcd6fc78"}},{"b":4,"t":"Wood finds him at a London inn and greets him as Father.","r":{"c":12,"p":9,"h":"fcafddb8"}}]},{"a":"cola","b":"grove","l":"treats and spars with","ev":false,"c":[{"b":1,"t":"Clears Grove's eye and spars with him over the new philosophy at dinner.","r":{"c":7,"p":22,"h":"6e2cc928"}},{"b":3,"t":"Wallis: Cola poisoned Grove's bottle.","r":{"c":8,"p":79,"h":"01e8a4d0"}}]},{"a":"cola","b":"thurloe","l":"is summoned by","ev":false,"c":[{"b":1,"t":"Summoned to Great Milton to meet Prestcott.","r":{"c":15,"p":17,"h":"00bb9856"}},{"b":3,"t":"Thurloe advises Wallis simply to kill him.","r":{"c":10,"p":69,"h":"8d4369dc"}}]},{"a":"cola","b":"compton","l":"is the secret guest of","ev":false,"c":[{"b":2,"t":"Staying with Sir William; he saves Sir William's life after the stabbing.","r":{"c":14,"p":7,"h":"ffbc04d9"}},{"b":3,"t":"Wallis reads their talk as a plot against Clarendon.","r":{"c":9,"p":62,"h":"d855b296"}}]},{"a":"cola","b":"sirjames","l":"corresponded with","ev":false,"c":[{"b":2,"t":"Says he served alongside Sir James for Venice.","r":{"c":13,"p":6,"h":"65b52dd3"}},{"b":4,"t":"Sir James wrote to Andrea da Cola about the King's dealings with Rome.","r":{"c":9,"p":10,"h":"1ebaabdc"}}]},{"a":"cola","b":"bennet","l":"is secretly summoned by","ev":false,"c":[{"b":4,"t":"Bennet's coded letter brought him over and Bennet took him to the King.","r":{"c":12,"p":76,"h":"44c6a794"}}]},{"a":"cola","b":"king","l":"receives into the Catholic Church","ev":false,"c":[{"b":4,"t":"His hidden purpose in England: making the King a Catholic.","r":{"c":12,"p":78,"h":"c9a004f5"}}]},{"a":"cola","b":"matthew","l":"is accused of killing","ev":false,"c":[{"b":1,"t":"Fought off a hired thug on his first night in London.","r":{"c":1,"p":11,"h":"0fc6482a"}},{"b":3,"t":"Wallis is sure Cola cut Matthew's throat.","r":{"c":7,"p":19,"h":"2c3bf75e"}},{"b":4,"t":"Wood doubts it: Cola was not a man of violence.","r":{"c":12,"p":79,"h":"981e9e58"}}]},{"a":"cola","b":"giovanni","l":"is the son of","ev":false,"c":[{"b":1,"t":"Obeys his father's summons to England.","r":{"c":1,"p":8,"h":"0c8fb871"}}]},{"a":"cola","b":"marco","l":"took the name of his brother","ev":false,"c":[{"b":4,"t":"Andrea took his dead brother's name and history.","r":{"c":12,"p":20,"h":"38f83dd4"}}]},{"a":"cola","b":"dipietro","l":"arrives too late for","ev":false,"c":[{"b":1,"t":"Arrives to find the agent dead.","r":{"c":1,"p":9,"h":"2ac8ae29"}}]},{"a":"cola","b":"mansion","l":"is cheated by","ev":false,"c":[{"b":1,"t":"Mansion steals the business and sends thugs.","r":{"c":1,"p":11,"h":"0fc6482a"}}]},{"a":"cola","b":"sylvius","l":"studied under","ev":false,"c":[{"b":1,"t":"Carries Sylvius's letter of introduction to Boyle.","r":{"c":3,"p":62,"h":"b918d2a9"}},{"b":3,"t":"Sylvius's letter alerts the Royal Society that Cola is coming.","r":{"c":5,"p":51,"h":"7f0bab38"}}]},{"a":"cola","b":"locke","l":"distrusts","ev":false,"c":[{"b":1,"t":"Cola resents Locke's ease with the powerful.","r":{"c":12,"p":154,"h":"d88006b0"}}]},{"a":"cola","b":"stahl","l":"watches the tests of","ev":false,"c":[{"b":1,"t":"Watches Stahl test the brandy sediment.","r":{"c":14,"p":86,"h":"6a731e61"}}]},{"a":"cola","b":"bulstrode","l":"lodges with","ev":false,"c":[{"b":1,"t":"Lodges with her.","r":{"c":4,"p":2,"h":"4a7b4b46"}},{"b":4,"t":"Wood searches his trunk in her house.","r":{"c":8,"p":50,"h":"c3ebfb6d"}}]},{"a":"cola","b":"fulgrove","l":"is questioned by","ev":false,"c":[{"b":1,"t":"The magistrate briefly treats Cola as a suspect.","r":{"c":14,"p":149,"h":"a84d6d41"}}]},{"a":"cola","b":"gamarra","l":"gets a coded letter at the embassy of","ev":false,"c":[{"b":3,"t":"Matthew delivers the coded letter to Cola at the Spanish embassy.","r":{"c":3,"p":39,"h":"cdcc07d2"}}]},{"a":"cola","b":"jackson","l":"is investigated by","ev":false,"c":[{"b":3,"t":"Reports on the Cola family from Venice.","r":{"c":2,"p":5,"h":"58eabf03"}}]},{"a":"cola","b":"aubrey","l":"is seen at court by","ev":false,"c":[{"b":4,"t":"Aubrey saw him with Bennet in Whitehall.","r":{"c":12,"p":47,"h":"018a378a"}}]},{"a":"prestcott","b":"sarah","l":"rapes and frames","ev":false,"c":[{"b":1,"t":"His story of the ring convinces Cola she is guilty.","r":{"c":15,"p":80,"h":"e92681fa"}},{"b":2,"t":"Rapes her, believes she bewitched him, and frames her with Grove's ring.","r":{"c":8,"p":30,"h":"9f01dd62"}},{"b":4,"t":"Wood: his slanders about her were lies.","r":{"c":2,"p":37,"h":"c3fc29ad"}}]},{"a":"prestcott","b":"sirjames","l":"fights to clear the name of","ev":false,"c":[{"b":2,"t":"Worships his father and sets out to clear his name.","r":{"c":4,"p":21,"h":"2dd1bc01"}},{"b":3,"t":"Told of his father's real crime, he breaks down.","r":{"c":11,"p":107,"h":"d906b225"}}]},{"a":"prestcott","b":"anne","l":"consults","ev":false,"c":[{"b":2,"t":"Has her scry for his father's betrayer.","r":{"c":4,"p":15,"h":"ba741839"}}]},{"a":"prestcott","b":"compton","l":"is the ward and assailant of","ev":false,"c":[{"b":2,"t":"Raised by Sir William; stabs him on a dark path.","r":{"c":13,"p":46,"h":"fc52a6dd"}}]},{"a":"prestcott","b":"grove","l":"was taught by","ev":false,"c":[{"b":2,"t":"Grove taught him as a boy and helps him think the case through.","r":{"c":10,"p":185,"h":"dfe4d149"}},{"b":2,"t":"Watches him die in agony on the night of the escape.","r":{"c":14,"p":14,"h":"0915778e"}}]},{"a":"prestcott","b":"ken","l":"is the friend and shield of","ev":false,"c":[{"b":2,"t":"Ken funds the quest; Jack covers for him on the night of the murder.","r":{"c":14,"p":44,"h":"2074e707"}},{"b":4,"t":"Ken saw Jack escape and kept quiet to save his living.","r":{"c":8,"p":7,"h":"d219382e"}}]},{"a":"prestcott","b":"wallis","l":"ties up, then bargains with","ev":false,"c":[{"b":1,"t":"Ties Wallis up and walks out of jail in his clothes.","r":{"c":9,"p":5,"h":"e348726d"}},{"b":2,"t":"Steals papers from Wallis's room after the escape.","r":{"c":14,"p":10,"h":"b22e34b3"}},{"b":3,"t":"Wallis trades Sarah's life for his testimony.","r":{"c":9,"p":73,"h":"becf257f"}}]},{"a":"prestcott","b":"thurloe","l":"comes to kill, then is sheltered by","ev":false,"c":[{"b":1,"t":"Thurloe hides him at Great Milton.","r":{"c":15,"p":55,"h":"88141521"}},{"b":2,"t":"Comes to kill Thurloe and is talked out of it.","r":{"c":15,"p":60,"h":"23bce1c0"}},{"b":3,"t":"Thurloe arranges the bargain with Wallis.","r":{"c":10,"p":116,"h":"4a7b7840"}}]},{"a":"prestcott","b":"mordaunt","l":"interviews","ev":false,"c":[{"b":2,"t":"Interviews him at Windsor.","r":{"c":4,"p":83,"h":"9967dffc"}}]},{"a":"prestcott","b":"morland","l":"visits under a false name","ev":false,"c":[{"b":2,"t":"Visits him under a false name and is thrown out.","r":{"c":11,"p":79,"h":"764cf582"}}]},{"a":"prestcott","b":"russell","l":"is humiliated by","ev":false,"c":[{"b":2,"t":"Thrown out publicly at Tunbridge Wells.","r":{"c":5,"p":18,"h":"752a424c"}}]},{"a":"prestcott","b":"collop","l":"learns the truth from","ev":false,"c":[{"b":2,"t":"Hears how his father's fall served the drainers.","r":{"c":11,"p":196,"h":"05ee343b"}}]},{"a":"prestcott","b":"kitty","l":"protects, then betrays","ev":false,"c":[{"b":2,"t":"Protects her on the road; she later feeds him information; he betrays her secret.","r":{"c":5,"p":2,"h":"04ae8ee8"}},{"b":3,"t":"He names her as his source.","r":{"c":11,"p":91,"h":"94f1930a"}}]},{"a":"prestcott","b":"greatorex","l":"has his horoscope cast by","ev":false,"c":[{"b":2,"t":"Pays for his horoscope and counter-magic.","r":{"c":10,"p":98,"h":"516773d9"}}]},{"a":"prestcott","b":"uncle","l":"is dispossessed by","ev":false,"c":[{"b":2,"t":"Finds the deeds showing his uncle now owns the estate.","r":{"c":9,"p":91,"h":"53351ab0"}}]},{"a":"prestcott","b":"jackmother","l":"is the son of","ev":false,"c":[{"b":2,"t":"Visits her and learns of the lost packet.","r":{"c":9,"p":75,"h":"cb5e40a0"}}]},{"a":"prestcott","b":"wood","l":"uses, then leaves his papers with","ev":false,"c":[{"b":2,"t":"Ken brings Wood to help with his research.","r":{"c":6,"p":6,"h":"26ae0bd2"}},{"b":4,"t":"Leaves the stolen coded letters with Wood for safekeeping.","r":{"c":11,"p":11,"h":"0b65fd70"}}]},{"a":"prestcott","b":"lower","l":"refuses his corpse to","ev":false,"c":[{"b":1,"t":"Lower asks for his body for dissection.","r":{"c":5,"p":40,"h":"1c8eaa41"}},{"b":2,"t":"Lower is now his family's doctor.","r":{"c":1,"p":1,"h":"e22debab"}}]},{"a":"prestcott","b":"fullerton","l":"bribes","ev":false,"c":[{"b":2,"t":"Pays her to back the Grove slander.","r":{"c":9,"p":30,"h":"99bf6e81"}}]},{"a":"wallis","b":"matthew","l":"loves and loses","ev":false,"c":[{"b":3,"t":"Loved him as a son, sent him to spy, and lost him.","r":{"c":2,"p":12,"h":"fd314fb1"}},{"b":4,"t":"Wood saw how cruelly he treated the boy he loved.","r":{"c":2,"p":65,"h":"0a493b07"}}]},{"a":"wallis","b":"bennet","l":"serves","ev":false,"c":[{"b":3,"t":"Works for Bennet's intelligence; hides his findings once Matthew dies.","r":{"c":7,"p":35,"h":"32b14833"}},{"b":4,"t":"Bennet, secretly Catholic, was deceiving him all along.","r":{"c":12,"p":75,"h":"ed3d9f56"}}]},{"a":"wallis","b":"thurloe","l":"is manipulated by","ev":false,"c":[{"b":2,"t":"Jack learns Wallis once read letters for Thurloe.","r":{"c":7,"p":24,"h":"2f99bef2"}},{"b":3,"t":"Thurloe tricks him into a judicial murder.","r":{"c":11,"p":78,"h":"c0173a42"}}]},{"a":"wallis","b":"clarendon","l":"warns","ev":false,"c":[{"b":3,"t":"Lays the plot before the Lord Chancellor.","r":{"c":12,"p":44,"h":"b471111b"}}]},{"a":"wallis","b":"bristol","l":"brings down","ev":false,"c":[{"b":3,"t":"Proposes goading Bristol into a fatal blunder.","r":{"c":12,"p":83,"h":"66183af9"}}]},{"a":"wallis","b":"sarah","l":"lets hang","ev":false,"c":[{"b":3,"t":"Strikes her during questioning and lets her hang.","r":{"c":10,"p":35,"h":"4fb849e1"}},{"b":4,"t":"Tells Wood he does not care whether she is innocent.","r":{"c":10,"p":94,"h":"8edd1302"}}]},{"a":"wallis","b":"grove","l":"lodges beside","ev":false,"c":[{"b":3,"t":"Lodges on Grove's staircase at New College; Grove dies in his place.","r":{"c":8,"p":65,"h":"1627afd0"}},{"b":4,"t":"Grove threatens that Wallis will hear of Wood's affair.","r":{"c":5,"p":38,"h":"338847e5"}}]},{"a":"wallis","b":"lower","l":"lies to","ev":false,"c":[{"b":3,"t":"Feeds him lies about Cola and plans to use him to spread a rumour about the Queen.","r":{"c":12,"p":99,"h":"ae644327"}}]},{"a":"wallis","b":"boyle","l":"confides in","ev":false,"c":[{"b":3,"t":"Tests his theory of Cola on Boyle.","r":{"c":8,"p":29,"h":"115cc9a7"}}]},{"a":"wallis","b":"wood","l":"employs and bullies","ev":false,"c":[{"b":3,"t":"Sets him hunting the Livy edition.","r":{"c":3,"p":55,"h":"f12de93a"}},{"b":4,"t":"Throws Wood into the street when he pleads for Sarah.","r":{"c":10,"p":98,"h":"9b3a04cd"}}]},{"a":"wallis","b":"ken","l":"backs","ev":false,"c":[{"b":3,"t":"Promised Ken his support for the living.","r":{"c":4,"p":35,"h":"352b9e35"}}]},{"a":"wallis","b":"cooth","l":"hires","ev":false,"c":[{"b":3,"t":"Sends him for di Pietro's mailbag.","r":{"c":2,"p":84,"h":"333701a6"}}]},{"a":"wallis","b":"williams","l":"gets intelligence from","ev":false,"c":[{"b":3,"t":"Gets City gossip on the Colas.","r":{"c":2,"p":41,"h":"a43ce4b8"}}]},{"a":"wallis","b":"bushrod","l":"gets intelligence from","ev":false,"c":[{"b":3,"t":"Interrogates him in prison about Candia.","r":{"c":2,"p":71,"h":"ce718bb1"}}]},{"a":"wallis","b":"jackson","l":"gets intelligence from","ev":false,"c":[{"b":3,"t":"Pays him to report from Venice.","r":{"c":2,"p":5,"h":"58eabf03"}}]},{"a":"wallis","b":"oldenburg","l":"hears of Cola from","ev":false,"c":[{"b":3,"t":"Hears of Cola through him.","r":{"c":5,"p":42,"h":"5d298d43"}}]},{"a":"wallis","b":"moledi","l":"provokes","ev":false,"c":[{"b":3,"t":"Warns him of rumours of a Spanish plot.","r":{"c":6,"p":97,"h":"1cd65c05"}}]},{"a":"wallis","b":"morland","l":"refuses to help","ev":false,"c":[{"b":3,"t":"Refused to work on Morland's letter without the key.","r":{"c":4,"p":14,"h":"55878372"}}]},{"a":"wallis","b":"fulgrove","l":"has Sarah arrested by","ev":false,"c":[{"b":3,"t":"Has him arrest Sarah.","r":{"c":11,"p":2,"h":"b595d091"}}]},{"a":"wallis","b":"greatorex","l":"drives out","ev":false,"c":[{"b":3,"t":"Persuades the magus to leave Oxford.","r":{"c":2,"p":83,"h":"f8702ba5"}}]},{"a":"wood","b":"sarah","l":"loves","ev":false,"c":[{"b":1,"t":"Rises to speak for her at the trial.","r":{"c":17,"p":37,"h":"95e6bd02"}},{"b":4,"t":"Loves her, wrongs her with jealousy, and witnesses her revival.","r":{"c":11,"p":135,"h":"f4645db3"}}]},{"a":"wood","b":"grove","l":"unwittingly kills","ev":false,"c":[{"b":4,"t":"Humiliated by Grove, he spikes his brandy.","r":{"c":5,"p":43,"h":"8ce4b739"}}]},{"a":"wood","b":"lower","l":"is the old friend of","ev":false,"c":[{"b":1,"t":"Lower leaves Cola alone with Wood as a prank.","r":{"c":12,"p":66,"h":"db46ae47"}},{"b":4,"t":"Lower saves Sarah with Wood's help and later sends him the manuscripts.","r":{"c":1,"p":1,"h":"2d804739"}}]},{"a":"wood","b":"anne","l":"interviews","ev":false,"c":[{"b":4,"t":"Interviews her for his history of the siege.","r":{"c":1,"p":26,"h":"9110fe7d"}}]},{"a":"wood","b":"ned","l":"keeps the packet of","ev":false,"c":[{"b":4,"t":"Hides Ned's sealed packet under his floorboards.","r":{"c":3,"p":17,"h":"aee75093"}}]},{"a":"wood","b":"mrswood","l":"is the son of","ev":false,"c":[{"b":4,"t":"She hides Sarah in his rooms.","r":{"c":11,"p":152,"h":"43c852f8"}}]},{"a":"wood","b":"ken","l":"plays viols with","ev":false,"c":[{"b":4,"t":"They play viols together.","r":{"c":2,"p":71,"h":"0bc091c5"}}]},{"a":"wood","b":"locke","l":"is helped by","ev":false,"c":[{"b":4,"t":"Locke stops Wood's outburst at the trial and saves Sarah later.","r":{"c":11,"p":4,"h":"636d8b46"}}]},{"a":"wood","b":"greatorex","l":"is consoled by","ev":false,"c":[{"b":4,"t":"Spends the night before the hanging with him.","r":{"c":11,"p":28,"h":"db003bbd"}}]},{"a":"wood","b":"fulgrove","l":"confesses in vain to","ev":false,"c":[{"b":4,"t":"His confession is dismissed.","r":{"c":10,"p":82,"h":"5d27953f"}}]},{"a":"wood","b":"aubrey","l":"hears gossip from","ev":false,"c":[{"b":4,"t":"Aubrey tells him of Cola in Whitehall.","r":{"c":12,"p":47,"h":"018a378a"}}]},{"a":"wood","b":"tanner","l":"names as executor","ev":false,"c":[{"b":4,"t":"Tanner will burn his papers.","r":{"c":12,"p":74,"h":"f0ac122d"}}]},{"a":"wood","b":"bennet","l":"decodes the letter of","ev":false,"c":[{"b":4,"t":"Reads Bennet's letter with the Livy key.","r":{"c":12,"p":76,"h":"44c6a794"}}]},{"a":"wood","b":"bulstrode","l":"gets into Cola's room through","ev":false,"c":[{"b":4,"t":"Gets into Cola's room through her.","r":{"c":8,"p":50,"h":"c3ebfb6d"}}]},{"a":"sarah","b":"anne","l":"is the daughter of","ev":false,"c":[{"b":1,"t":"Devoted to her dying mother and gives her blood.","r":{"c":11,"p":33,"h":"e7b49d08"}},{"b":4,"t":"Insists on attending her mother's burial in disguise.","r":{"c":11,"p":194,"h":"eacfdc73"}}]},{"a":"sarah","b":"ned","l":"is the daughter in name of","ev":false,"c":[{"b":4,"t":"Keeps his packet; learns he was not her natural father.","r":{"c":10,"p":23,"h":"0407ebaf"}}]},{"a":"anne","b":"ned","l":"is the wife of","ev":false,"c":[{"b":3,"t":"Fought beside him in the war.","r":{"c":8,"p":6,"h":"bd719bd9"}},{"b":4,"t":"Calls him the best of men.","r":{"c":10,"p":25,"h":"76cfc3d9"}}]},{"a":"sarah","b":"grove","l":"was dismissed by","ev":false,"c":[{"b":1,"t":"Begs him for money in the coffee house and is refused.","r":{"c":2,"p":11,"h":"3bc63fe9"}},{"b":2,"t":"Jack spreads rumours that they were lovers.","r":{"c":9,"p":30,"h":"99bf6e81"}},{"b":4,"t":"Wood found her the job with Grove.","r":{"c":2,"p":72,"h":"8f0b165f"}}]},{"a":"sarah","b":"lower","l":"is saved by","ev":false,"c":[{"b":1,"t":"Lower takes her body for dissection.","r":{"c":18,"p":57,"h":"d7c54c60"}},{"b":4,"t":"Lower spares her and hides her.","r":{"c":11,"p":126,"h":"e619f5a4"}}]},{"a":"sarah","b":"locke","l":"is saved by","ev":false,"c":[{"b":4,"t":"Locke notices she is breathing.","r":{"c":11,"p":84,"h":"891317ab"}}]},{"a":"sarah","b":"ken","l":"is falsely accused by","ev":false,"c":[{"b":1,"t":"Ken testifies she went into Grove's room that night.","r":{"c":14,"p":235,"h":"6d9e1946"}},{"b":4,"t":"Ken's lie and silence send her to the gallows.","r":{"c":8,"p":7,"h":"d219382e"}}]},{"a":"sarah","b":"crosse","l":"buys arsenic from","ev":false,"c":[{"b":1,"t":"Bought arsenic at his shop.","r":{"c":14,"p":222,"h":"2fd7a6e0"}}]},{"a":"sarah","b":"fulgrove","l":"is prosecuted by","ev":false,"c":[{"b":1,"t":"He prepares the case for her trial.","r":{"c":16,"p":28,"h":"d94d395a"}}]},{"a":"sarah","b":"boyle","l":"is asked for recipes by","ev":false,"c":[{"b":1,"t":"Refused to share remedies with Boyle.","r":{"c":3,"p":75,"h":"060fcfe7"}},{"b":4,"t":"She had no recipes to give.","r":{"c":6,"p":56,"h":"e136a515"}}]},{"a":"sarah","b":"greatorex","l":"is revered by","ev":false,"c":[{"b":2,"t":"He warns Jack she is the most powerful being he has met.","r":{"c":10,"p":77,"h":"c4d9ab82"}},{"b":4,"t":"He kneels for her blessing.","r":{"c":10,"p":38,"h":"47deb3f5"}}]},{"a":"sarah","b":"mrswood","l":"serves","ev":false,"c":[{"b":1,"t":"Mrs Wood feeds her in prison.","r":{"c":16,"p":65,"h":"5698bbe1"}},{"b":4,"t":"Mrs Wood shelters her.","r":{"c":11,"p":152,"h":"43c852f8"}}]},{"a":"sarah","b":"thomaslower","l":"is taken to Plymouth by","ev":false,"c":[{"b":4,"t":"Takes her to Plymouth.","r":{"c":11,"p":205,"h":"20940bb9"}}]},{"a":"sarah","b":"tidmarsh","l":"preaches at the meetings of","ev":false,"c":[{"b":2,"t":"Ken goes to Tidmarsh's to win her confidence.","r":{"c":6,"p":77,"h":"fee9d2d6"}},{"b":3,"t":"Wallis knows of her meetings there.","r":{"c":10,"p":27,"h":"ec3c5da1"}}]},{"a":"sarah","b":"fullerton","l":"is slandered by","ev":false,"c":[{"b":1,"t":"Mary's story makes Sarah a whore in court.","r":{"c":17,"p":13,"h":"503b4799"}}]},{"a":"anne","b":"thurloe","l":"is injured by the men of","ev":false,"c":[{"b":4,"t":"Thurloe's man broke her leg searching for Ned's papers.","r":{"c":4,"p":68,"h":"0f89ced9"}}]},{"a":"ned","b":"sirjames","l":"secretly aids","ev":false,"c":[{"b":2,"t":"Rode with Sir James to his wife in 1660.","r":{"c":9,"p":77,"h":"1faeb0d7"}},{"b":3,"t":"Leaked state secrets to him out of old Lincolnshire loyalty.","r":{"c":11,"p":46,"h":"417c5a63"}},{"b":4,"t":"Their combined papers could destroy the King.","r":{"c":9,"p":5,"h":"821b6b22"}}]},{"a":"ned","b":"thurloe","l":"carries messages for","ev":false,"c":[{"b":3,"t":"Thurloe trusted him above all his messengers.","r":{"c":11,"p":45,"h":"ed535d64"}}]},{"a":"ned","b":"king","l":"dies saving","ev":false,"c":[{"b":3,"t":"Took the blow meant for Charles.","r":{"c":11,"p":57,"h":"9046be3a"}}]},{"a":"sirjames","b":"king","l":"tries to kill","ev":false,"c":[{"b":3,"t":"Attacked the King at Deal after learning of the secret talks.","r":{"c":11,"p":52,"h":"40f164c2"}},{"b":4,"t":"Enraged because the King promised to persecute Catholics while courting Rome.","r":{"c":9,"p":10,"h":"1ebaabdc"}}]},{"a":"sirjames","b":"compton","l":"is denounced by","ev":false,"c":[{"b":2,"t":"Best friends; Compton denounced him on Russell's evidence.","r":{"c":10,"p":208,"h":"13d72247"}}]},{"a":"sirjames","b":"mordaunt","l":"takes the blame for","ev":false,"c":[{"b":2,"t":"Took the blame for Mordaunt's betrayal.","r":{"c":15,"p":72,"h":"ce697761"}},{"b":3,"t":"Thurloe: the papers framing him were meant to hide a worse crime.","r":{"c":11,"p":61,"h":"d20809d6"}}]},{"a":"sirjames","b":"morland","l":"is framed by","ev":false,"c":[{"b":2,"t":"Morland's papers damned him and won Morland Harland Wyte.","r":{"c":11,"p":54,"h":"28494cd8"}},{"b":3,"t":"Samuel forged the letters.","r":{"c":11,"p":61,"h":"d20809d6"}}]},{"a":"sirjames","b":"russell","l":"blocks the fen schemes of","ev":false,"c":[{"b":2,"t":"Blocked the Russells' fen drainage for years.","r":{"c":11,"p":196,"h":"05ee343b"}}]},{"a":"sirjames","b":"jackmother","l":"is the husband of","ev":false,"c":[{"b":2,"t":"Married for love against both families.","r":{"c":9,"p":54,"h":"08ba752c"}}]},{"a":"mordaunt","b":"morland","l":"may have worked with","ev":false,"c":[{"b":2,"t":"Jack decides they worked together from Savoy.","r":{"c":11,"p":162,"h":"7979cf6e"}},{"b":2,"t":"Thurloe tells Jack that Morland controlled a prized informer code-named Mr Barrett.","r":{"c":15,"p":88,"h":"5d606080"}}]},{"a":"mordaunt","b":"king","l":"obeys","ev":false,"c":[{"b":3,"t":"Betrayed the 1659 rising on royal orders.","r":{"c":10,"p":96,"h":"d3d154b2"}}]},{"a":"morland","b":"thurloe","l":"clerked and forged for","ev":false,"c":[{"b":3,"t":"Thurloe's former clerk and forger.","r":{"c":11,"p":61,"h":"d20809d6"}}]},{"a":"compton","b":"clarendon","l":"feuds with","ev":false,"c":[{"b":2,"t":"Quarrel over hunting rights and Warwickshire.","r":{"c":13,"p":39,"h":"5144dd3d"}}]},{"a":"compton","b":"grove","l":"employed as chaplain and tutor","ev":false,"c":[{"b":2,"t":"Grove was chaplain and tutor in Compton's house.","r":{"c":10,"p":156,"h":"ec9939ba"}}]},{"a":"compton","b":"uncle","l":"sells the estate to","ev":false,"c":[{"b":2,"t":"Compton signed the estate over to Jack's uncle.","r":{"c":9,"p":91,"h":"53351ab0"}}]},{"a":"russell","b":"collop","l":"shares the Bedford interest with","ev":false,"c":[{"b":2,"t":"Collop says Russell had the papers from Morland.","r":{"c":11,"p":206,"h":"aaab2a6b"}}]},{"a":"kitty","b":"bristol","l":"is the mistress of","ev":false,"c":[{"b":2,"t":"Kept by Bristol in London.","r":{"c":11,"p":102,"h":"d8dc44a8"}}]},{"a":"jackmother","b":"uncle","l":"lives on the charity of","ev":false,"c":[{"b":2,"t":"Lives on his charity.","r":{"c":9,"p":40,"h":"0035b693"}}]},{"a":"ken","b":"maynard","l":"seeks a living from","ev":false,"c":[{"b":2,"t":"Ken courts the Easton Parva living.","r":{"c":3,"p":40,"h":"473fd561"}}]},{"a":"grove","b":"ken","l":"competes for the living with","ev":false,"c":[{"b":1,"t":"Humiliates Ken at dinner in front of Lord Maynard's circle.","r":{"c":8,"p":41,"h":"f6f43de0"}},{"b":2,"t":"Rivals for the living; Jack believes Ken killed him.","r":{"c":1,"p":8,"h":"004821ed"}},{"b":4,"t":"Ken lied about him to the Warden.","r":{"c":8,"p":7,"h":"d219382e"}}]},{"a":"grove","b":"woodward","l":"is a Fellow under","ev":false,"c":[{"b":1,"t":"Woodward tries to hush up his death.","r":{"c":14,"p":10,"h":"026fea8a"}}]},{"a":"grove","b":"stahl","l":"is proved poisoned by","ev":false,"c":[{"b":1,"t":"Stahl identifies the arsenic in his brandy.","r":{"c":14,"p":86,"h":"6a731e61"}}]},{"a":"grove","b":"lower","l":"is dissected by","ev":false,"c":[{"b":1,"t":"Lower dissects him in the warden's kitchen.","r":{"c":12,"p":32,"h":"db9340bd"}}]},{"a":"grove","b":"fullerton","l":"is slandered by","ev":false,"c":[{"b":1,"t":"Her story damns him posthumously.","r":{"c":17,"p":13,"h":"503b4799"}}]},{"a":"lower","b":"boyle","l":"assists","ev":false,"c":[{"b":1,"t":"Lower depends on Boyle's patronage.","r":{"c":5,"p":2,"h":"aa9e95d9"}}]},{"a":"lower","b":"locke","l":"works with","ev":false,"c":[{"b":1,"t":"Transfuse dogs together in secret.","r":{"c":16,"p":105,"h":"ef25883a"}},{"b":4,"t":"Together they decide to spare Sarah.","r":{"c":11,"p":96,"h":"cdcc3a8e"}}]},{"a":"lower","b":"wren","l":"works with","ev":false,"c":[{"b":1,"t":"Wren devised injection experiments with Lower.","r":{"c":6,"p":89,"h":"7a75a104"}}]},{"a":"lower","b":"stahl","l":"takes lessons from","ev":false,"c":[{"b":1,"t":"Pays Stahl for chemistry lessons.","r":{"c":12,"p":134,"h":"fe93738c"}}]},{"a":"lower","b":"thomaslower","l":"is the brother of","ev":false,"c":[{"b":4,"t":"Arranges Sarah's escape through his brother.","r":{"c":11,"p":185,"h":"05944888"}}]},{"a":"lower","b":"aylesbury","l":"dissects","ev":false,"c":[{"b":1,"t":"Buys her corpse.","r":{"c":15,"p":3,"h":"c12efef3"}},{"b":4,"t":"Uses it to fake Sarah's dissection.","r":{"c":11,"p":141,"h":"04d7fe2f"}}]},{"a":"lower","b":"crosse","l":"works from the shop of","ev":false,"c":[{"b":1,"t":"Sends the pickled corpse to Crosse's.","r":{"c":3,"p":3,"h":"6e301421"}}]},{"a":"thurloe","b":"king","l":"negotiated in secret with","ev":false,"c":[{"b":3,"t":"Ran the secret restoration talks.","r":{"c":10,"p":90,"h":"a7984a1a"}}]},{"a":"bennet","b":"king","l":"serves","ev":false,"c":[{"b":3,"t":"The King's trusted servant.","r":{"c":6,"p":107,"h":"ebc43074"}},{"b":4,"t":"Arranged the King's secret conversion.","r":{"c":12,"p":76,"h":"44c6a794"}}]},{"a":"bennet","b":"clarendon","l":"allies briefly with","ev":false,"c":[{"b":3,"t":"Ally to destroy Bristol, then compete.","r":{"c":12,"p":17,"h":"5533b4aa"}}]},{"a":"bennet","b":"bristol","l":"abandons","ev":false,"c":[{"b":3,"t":"Bristol advanced Bennet; Bennet lets him fall.","r":{"c":12,"p":25,"h":"3af865e5"}}]},{"a":"clarendon","b":"bristol","l":"is attacked by","ev":false,"c":[{"b":3,"t":"Bristol tries to impeach him and is exiled.","r":{"c":14,"p":1,"h":"934ee22d"}}]},{"a":"bennet","b":"moledi","l":"hears complaints from","ev":false,"c":[{"b":3,"t":"De Moledi complains to Bennet about Wallis.","r":{"c":6,"p":97,"h":"1cd65c05"}}]},{"a":"bennet","b":"matthew","l":"may have ordered the death of","ev":false,"c":[{"b":4,"t":"Wood suspects Bennet had Matthew killed.","r":{"c":12,"p":79,"h":"981e9e58"}}]},{"a":"bennet","b":"aubrey","l":"is seen by","ev":false,"c":[{"b":4,"t":"Seen escorting Cola to the King.","r":{"c":12,"p":47,"h":"018a378a"}}]},{"a":"cooth","b":"dipietro","l":"murders","ev":false,"c":[{"b":3,"t":"Cuts his throat during the burglary.","r":{"c":2,"p":86,"h":"99b7ee77"}}]},{"a":"cooth","b":"matthew","l":"may have killed","ev":false,"c":[{"b":4,"t":"Wood suspects Cooth.","r":{"c":12,"p":79,"h":"981e9e58"}}]},{"a":"marco","b":"bushrod","l":"was carried home by","ev":false,"c":[{"b":3,"t":"Bushrod carried him from Candia.","r":{"c":2,"p":77,"h":"b0638967"}}]},{"a":"matthew","b":"gamarra","l":"delivers a letter to the embassy of","ev":false,"c":[{"b":3,"t":"Matthew delivers the letter at the Spanish embassy.","r":{"c":3,"p":39,"h":"cdcc07d2"}}]},{"a":"sylvius","b":"oldenburg","l":"writes to","ev":false,"c":[{"b":3,"t":"Sylvius's letter reaches Oldenburg.","r":{"c":5,"p":51,"h":"7f0bab38"}}]},{"a":"giovanni","b":"dipietro","l":"employs","ev":false,"c":[{"b":1,"t":"Di Pietro ran his London office.","r":{"c":1,"p":2,"h":"6db129f5"}}]},{"a":"giovanni","b":"mansion","l":"partners with","ev":false,"c":[{"b":1,"t":"Partners in the English trade.","r":{"c":1,"p":2,"h":"6db129f5"}}]},{"a":"giovanni","b":"marco","l":"is the father of","ev":false,"c":[{"b":3,"t":"Williams wonders why the father lets his soldier son wander.","r":{"c":2,"p":52,"h":"5a1bfe54"}}]},{"a":"e_grove","b":"grove","l":"victim","ev":true,"c":[{"b":1,"t":"Found dead in his room.","r":{"c":9,"p":27,"h":"7db6fce1"}}]},{"a":"e_grove","b":"sarah","l":"convicted","ev":true,"c":[{"b":1,"t":"Hanged for it.","r":{"c":17,"p":30,"h":"adb6ebc2"}}]},{"a":"e_grove","b":"ken","l":"Prestcott's answer","ev":true,"c":[{"b":2,"t":"Jack's answer.","r":{"c":1,"p":8,"h":"004821ed"}}]},{"a":"e_grove","b":"cola","l":"Wallis's answer","ev":true,"c":[{"b":3,"t":"Wallis's answer.","r":{"c":1,"p":1,"h":"5305cc20"}}]},{"a":"e_grove","b":"wood","l":"Wood's answer","ev":true,"c":[{"b":4,"t":"Wood's confession.","r":{"c":5,"p":45,"h":"75ecf9ad"}}]},{"a":"e_grove","b":"stahl","l":"identifies the poison","ev":true,"c":[{"b":1,"t":"Stahl's tests.","r":{"c":14,"p":86,"h":"6a731e61"}}]},{"a":"e_grove","b":"crosse","l":"sold the arsenic","ev":true,"c":[{"b":1,"t":"Crosse's ledger.","r":{"c":14,"p":222,"h":"2fd7a6e0"}}]},{"a":"e_blood","b":"cola","l":"claims it","ev":true,"c":[{"b":1,"t":"Cola's claim.","r":{"c":7,"p":1,"h":"3ea087ba"}}]},{"a":"e_blood","b":"lower","l":"publishes it","ev":true,"c":[{"b":1,"t":"Lower's paper.","r":{"c":18,"p":93,"h":"65871ef9"}}]},{"a":"e_blood","b":"anne","l":"receives it","ev":true,"c":[{"b":1,"t":"Anne receives the blood.","r":{"c":11,"p":35,"h":"c0223d71"}}]},{"a":"e_blood","b":"sarah","l":"gives the blood","ev":true,"c":[{"b":1,"t":"Sarah gives the blood.","r":{"c":11,"p":33,"h":"e7b49d08"}}]},{"a":"e_cipher","b":"ned","l":"his packet","ev":true,"c":[{"b":4,"t":"Ned's packet.","r":{"c":3,"p":17,"h":"aee75093"}}]},{"a":"e_cipher","b":"wallis","l":"cannot break it","ev":true,"c":[{"b":3,"t":"Wallis cannot break it without the Livy.","r":{"c":4,"p":33,"h":"598694e5"}}]},{"a":"e_cipher","b":"wood","l":"solves it","ev":true,"c":[{"b":4,"t":"Wood decodes it.","r":{"c":12,"p":64,"h":"e27edfea"}}]},{"a":"e_cipher","b":"sirjames","l":"wrote in it","ev":true,"c":[{"b":3,"t":"Sir James's 1660 letter uses the same Livy.","r":{"c":4,"p":33,"h":"598694e5"}}]},{"a":"e_cipher","b":"bennet","l":"wrote in it","ev":true,"c":[{"b":4,"t":"Bennet's letter to Cola is the prize.","r":{"c":12,"p":76,"h":"44c6a794"}}]},{"a":"e_cipher","b":"thurloe","l":"wants it buried","ev":true,"c":[{"b":3,"t":"Thurloe wants the packet lost forever.","r":{"c":11,"p":77,"h":"59db9e4d"}}]}],"hashes":["0035b693","004821ed","00bb9856","018a378a","019aee2c","01e8a4d0","026fea8a","0407ebaf","04ae8ee8","04d7fe2f","052b2020","05944888","05ee343b","060fcfe7","08ba752c","0915778e","0a493b07","0b65fd70","0b99cd90","0bc091c5","0c45f182","0c8fb871","0f89ced9","0fc6482a","115cc9a7","13d72247","14e540dc","1627afd0","189ee736","19680dbf","1c6b19bb","1c8eaa41","1cd65c05","1d4249bc","1d889a18","1dfd1a97","1ebaabdc","1faeb0d7","2074e707","20940bb9","22c053b7","23bce1c0","26ae0bd2","28494cd8","2ac8ae29","2c3bf75e","2d47f6c9","2d5d639e","2d804739","2dd1bc01","2f99bef2","2fd7a6e0","32b14833","333701a6","338847e5","33bb1ea0","33d8e001","34263814","352b9e35","356aab74","3648f73a","38f83dd4","39de89f2","3af865e5","3bc63fe9","3ea087ba","3eebc1e0","40517a65","40f164c2","417c5a63","41b06910","43c852f8","44c6a794","47106565","473fd561","4797dc03","47deb3f5","494d93f2","4a7b4b46","4a7b7840","4fb849e1","4fdf0d83","503b4799","513d85a6","5144dd3d","516773d9","5305cc20","53351ab0","538d378b","5533b4aa","555fbbb9","557dc399","55878372","5698bbe1","57a09600","58a65866","58d12da1","58eabf03","598694e5","59db9e4d","5a1bfe54","5b2294a5","5d27953f","5d298d43","5d606080","5f44de54","6234cc75","62543aee","62e738a5","636d8b46","63a4a230","65871ef9","65b52dd3","66183af9","6a731e61","6d9e1946","6db129f5","6e1221ae","6e2cc928","6e301421","6f7c0372","752a424c","75ecf9ad","764cf582","76cfc3d9","7979cf6e","7a75a104","7d72469f","7db6fce1","7ee8d19e","7f0bab38","80db2bce","81902212","821b6b22","88141521","88899f07","88b2095e","891317ab","8ce4b739","8d4369dc","8eda572d","8edd1302","8f0b165f","903cbe96","9046be3a","90bc34aa","9110fe7d","934ee22d","94f1930a","95e6bd02","96bdeb64","981e9e58","9967dffc","99b7ee77","99bf6e81","9b3a04cd","9f01dd62","a43ce4b8","a7984a1a","a84d6d41","a8a21607","a9a76bb4","aa039fcd","aa9e95d9","aaab2a6b","ab706591","adb6ebc2","ae644327","aee75093","b0638967","b0d996a9","b22e34b3","b4684d77","b471111b","b595d091","b6b825cd","b6e34ef3","b72b2f4f","b918d2a9","ba741839","bcd6fc78","bd719bd9","becf257f","bfdc4c0d","c0173a42","c0223d71","c12efef3","c3b606c6","c3ebfb6d","c3fc29ad","c4d9ab82","c9a004f5","cafdde82","cb5e40a0","cdcc07d2","cdcc3a8e","cde21d5d","ce697761","ce718bb1","cf61ca99","cfbcbdd5","cfe1e071","d0e14095","d20809d6","d219382e","d3d154b2","d56ecd62","d7c54c60","d855b296","d88006b0","d8aa8190","d8dc44a8","d906b225","d94d395a","db003bbd","db46ae47","db9340bd","dbef21b5","dfe4d149","e04500e7","e136a515","e14f097e","e22debab","e27edfea","e348726d","e402ff57","e4079dc7","e4e62716","e5029d43","e619f5a4","e7b49d08","e92681fa","eacfdc73","ebc43074","ec3c5da1","ec9939ba","ed3d9f56","ed535d64","edd7b69b","ef25883a","ef56f8f9","f0ac122d","f12de93a","f13ba342","f19bec8b","f3c0c9a6","f4645db3","f6f43de0","f8702ba5","f9a480ec","fc52a6dd","fcafddb8","fd314fb1","fe93738c","feae0957","fee9d2d6","ff13c7bb","ffbc04d9"]};
+const BOOKS = {
+  1: { narr: "Marco da Cola", title: "A Question of Precedence", c: "var(--b1)" },
+  2: { narr: "Jack Prestcott", title: "The Great Trust", c: "var(--b2)" },
+  3: { narr: "John Wallis", title: "The Character of Compliance", c: "var(--b3)" },
+  4: { narr: "Anthony Wood", title: "An Instance of the Fingerpost", c: "var(--b4)" },
+};
+const GROUPS = { narrator: "Narrators", blundy: "The Blundys", event: "Plot questions", oxford: "Oxford", venice: "The Colas", prestcott: "The Prestcott affair", court: "Court and government", wallis: "Wallis's network", wood: "Wood's circle" };
+const STORE = "fingerpost-paragraphs-v1";
+const $ = (s, el = document) => el.querySelector(s);
+const sentence = r => r.ev ? `${byId[r.a].short}: ${r.l}` : `${byId[r.a].short} ${r.l} ${byId[r.b].short}`;
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+/* ---------- state ---------- */
+const on = { 1: true, 2: true, 3: true, 4: true };
+const nodes = DATA.nodes, rels = DATA.rels;
+const byId = Object.fromEntries(nodes.map(n => [n.id, n]));
+const FACTS = [];          // every clickable piece: {b,t,r,node?,rel?}
+let paras = {};            // hash -> paragraph text from the user's copy
+let selected = null;
+
+/* ---------- paragraph loading (from the reader's own copy) ---------- */
+const DELIM = /(<br\s*\/?>|<h5>[\s\S]*?<\/h5>|<h4>[\s\S]*?<\/h4>|<title>[\s\S]*?<\/title>|<\/?div[^>]*>|<\/?blockquote[^>]*>|<hr\s*\/?>)/i;
+const ENT = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " };
+function decode(s) {
+  return s.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (m, e) => {
+    if (e[0] === "#") return String.fromCodePoint(e[1].toLowerCase() === "x" ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10));
+    return ENT[e.toLowerCase()] ?? m;
+  });
+}
+const norm = s => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+function fnv(s) { let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; } return h.toString(16).padStart(8, "0"); }
+function indexText(raw) {
+  const want = new Set(DATA.hashes), found = {};
+  const parts = raw.split(DELIM);
+  for (let i = 0; i < parts.length; i += 2) {
+    const text = decode(parts[i].replace(/<[^>]+>/g, " "));
+    const n = norm(text);
+    if (!n) continue;
+    const h = fnv(n);
+    if (want.has(h) && !found[h]) found[h] = text.replace(/\s+/g, " ").trim();
+  }
+  return found;
+}
+async function unzipHtml(buf) {
+  const v = new DataView(buf), u8 = new Uint8Array(buf), td = new TextDecoder("utf-8");
+  let eocd = -1;
+  for (let i = buf.byteLength - 22; i >= Math.max(0, buf.byteLength - 66000); i--) if (v.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  if (eocd < 0) throw new Error("That file is not a readable .epub.");
+  const count = v.getUint16(eocd + 10, true); let p = v.getUint32(eocd + 16, true);
+  const out = [];
+  for (let k = 0; k < count; k++) {
+    if (v.getUint32(p, true) !== 0x02014b50) break;
+    const method = v.getUint16(p + 10, true), csize = v.getUint32(p + 20, true);
+    const nlen = v.getUint16(p + 28, true), elen = v.getUint16(p + 30, true), clen = v.getUint16(p + 32, true);
+    const loff = v.getUint32(p + 42, true), name = td.decode(u8.subarray(p + 46, p + 46 + nlen));
+    p += 46 + nlen + elen + clen;
+    if (!/\.(x?html?|xml)$/i.test(name) || /container\.xml$|\.opf$|toc/i.test(name)) continue;
+    const start = loff + 30 + v.getUint16(loff + 26, true) + v.getUint16(loff + 28, true);
+    const data = u8.subarray(start, start + csize);
+    let bytes;
+    if (method === 0) bytes = data;
+    else if (method === 8) {
+      if (typeof DecompressionStream === "undefined") throw new Error("This browser cannot unpack .epub files. Open the ch1.xhtml file instead.");
+      const ds = new Blob([data]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+      bytes = new Uint8Array(await new Response(ds).arrayBuffer());
+    } else continue;
+    out.push(td.decode(bytes));
+  }
+  return out.join("\n");
+}
+async function loadFile(file) {
+  try {
+    const buf = await file.arrayBuffer();
+    const head = new Uint8Array(buf, 0, 2);
+    const raw = head[0] === 0x50 && head[1] === 0x4b ? await unzipHtml(buf) : new TextDecoder("utf-8").decode(buf);
+    const found = indexText(raw);
+    const n = Object.keys(found).length;
+    if (!n) { toast("No matching paragraphs in that file. Use the ch1.xhtml or .epub of this edition."); return; }
+    paras = found;
+    try { localStorage.setItem(STORE, JSON.stringify(found)); } catch (e) {}
+    markLoaded();
+    toast(`Loaded ${n} of ${DATA.hashes.length} source paragraphs from your copy.`);
+    if (!$("#pop").hidden && popState) renderPop();
+  } catch (e) { toast(e.message || "Could not read that file."); }
+}
+function markLoaded() {
+  const n = Object.keys(paras).length, b = $("#loadBtn");
+  b.classList.toggle("ok", n > 0);
+  b.textContent = n ? `Book loaded (${n} passages)` : "Open your book file";
+}
+try { const s = JSON.parse(localStorage.getItem(STORE) || "null"); if (s) paras = s; } catch (e) {}
+
+/* ---------- build the DOM ---------- */
+const world = $("#world"), svg = $("#edges"), viewport = $("#viewport");
+function factButton(f, i) {
+  return `<li><button type="button" class="fact" data-f="${i}" data-b="${f.b}" style="--c:${BOOKS[f.b].c}"><span class="n">${f.b}</span><span>${esc(f.t)}</span></button></li>`;
+}
+function namedLine(n) {
+  if (!n.mentions) return "";
+  const cells = [1, 2, 3, 4].map(b => `<i style="color:${BOOKS[b].c}" title="Book ${b}: ${n.narrator === b ? "narrator (writes as I)" : n.mentions[b - 1] + " mentions by name"}">${n.narrator === b ? "I" : n.mentions[b - 1]}</i>`).join("");
+  return `<div class="named" title="How often each narrative names this person (approximate)">named ${cells}</div>`;
+}
+for (const n of nodes) {
+  n.factIdx = n.facts.map(f => { FACTS.push({ ...f, node: n.id }); return FACTS.length - 1; });
+  const el = document.createElement("div");
+  el.className = `card ${n.size} ${n.kind === "event" ? "event" : ""} ${n.narrator ? "narrator" : ""}`;
+  el.dataset.id = n.id;
+  if (n.narrator) el.style.setProperty("--c", BOOKS[n.narrator].c);
+  el.innerHTML = `<button type="button" class="nm" data-sel="${n.id}">${esc(n.name)}${n.aka ? ` <span class="aka">${esc(n.aka)}</span>` : ""}</button>
+    <span class="role">${esc(n.role)}</span>
+    ${n.narrator ? `<span class="nar">Tells Book ${n.narrator}</span>` : ""}
+    ${namedLine(n)}
+    <ul class="facts">${n.factIdx.map(i => factButton(FACTS[i], i)).join("")}</ul>`;
+  world.appendChild(el);
+  n.el = el;
+}
+rels.forEach((r, ri) => { r.factIdx = r.c.map(f => { FACTS.push({ ...f, rel: ri }); return FACTS.length - 1; }); r.books = [...new Set(r.c.map(f => f.b))].sort(); });
+
+/* book toggles + jump list */
+const booksEl = $("#books");
+for (const b of [1, 2, 3, 4]) {
+  const B = BOOKS[b], btn = document.createElement("button");
+  btn.type = "button"; btn.className = "book"; btn.setAttribute("aria-pressed", "true"); btn.style.setProperty("--c", B.c); btn.dataset.b = b;
+  btn.innerHTML = `<span class="sw">${b}</span><span><b>${B.narr}</b><span class="t">${B.title}</span></span>`;
+  btn.addEventListener("click", () => { on[b] = !on[b]; btn.setAttribute("aria-pressed", on[b]); applyFilter(); });
+  booksEl.appendChild(btn);
+}
+const jump = $("#jump");
+for (const [g, label] of Object.entries(GROUPS)) {
+  const og = document.createElement("optgroup"); og.label = label;
+  nodes.filter(n => n.group === g).sort((a, b) => a.name.localeCompare(b.name)).forEach(n => { const o = document.createElement("option"); o.value = n.id; o.textContent = n.name + (n.aka ? ` (${n.aka})` : ""); og.appendChild(o); });
+  if (og.children.length) jump.appendChild(og);
+}
+jump.addEventListener("change", () => { if (jump.value) { select(jump.value, true); jump.value = ""; } });
+
+/* ---------- layout: keep cards near their quadrant anchors, remove overlaps ---------- */
+function layout() {
+  for (const n of nodes) { n.w = n.el.offsetWidth; n.h = n.el.offsetHeight; n.cx = n.x + n.w / 2; n.cy = n.y + n.h / 2; n.ax = n.cx; n.ay = n.cy; }
+  const pad = 30;
+  for (let it = 0; it < 400; it++) {
+    let moved = 0;
+    for (let i = 0; i < nodes.length; i++) for (let j = i + 1; j < nodes.length; j++) {
+      const a = nodes[i], b = nodes[j];
+      const dx = b.cx - a.cx, dy = b.cy - a.cy;
+      const ox = (a.w + b.w) / 2 + pad - Math.abs(dx), oy = (a.h + b.h) / 2 + pad - Math.abs(dy);
+      if (ox > 0 && oy > 0) {
+        const wa = a.size === "L" ? .3 : .5, wb = b.size === "L" ? .3 : .5, t = wa + wb;
+        if (ox < oy) { const s = (dx >= 0 ? 1 : -1) * ox; a.cx -= s * wa / t; b.cx += s * wb / t; }
+        else { const s = (dy >= 0 ? 1 : -1) * oy; a.cy -= s * wa / t; b.cy += s * wb / t; }
+        moved++;
+      }
+    }
+    for (const n of nodes) { n.cx += (n.ax - n.cx) * .012; n.cy += (n.ay - n.cy) * .012; }
+    if (!moved && it > 40) break;
+  }
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const n of nodes) { minX = Math.min(minX, n.cx - n.w / 2); minY = Math.min(minY, n.cy - n.h / 2); maxX = Math.max(maxX, n.cx + n.w / 2); maxY = Math.max(maxY, n.cy + n.h / 2); }
+  const M = 260, ox = M - minX, oy = M - minY;
+  for (const n of nodes) { n.cx += ox; n.cy += oy; n.el.style.left = (n.cx - n.w / 2) + "px"; n.el.style.top = (n.cy - n.h / 2) + "px"; }
+  W = maxX - minX + 2 * M; H = maxY - minY + 2 * M;
+  world.style.width = W + "px"; world.style.height = H + "px";
+  svg.setAttribute("width", W); svg.setAttribute("height", H); svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  // quadrant axes and book watermarks
+  const c = byId.e_grove, X = c.cx, Y = c.cy;
+  world.insertAdjacentHTML("afterbegin",
+    `<div class="axis" style="left:${X}px;top:40px;width:1px;height:${H - 80}px"></div>
+     <div class="axis" style="top:${Y}px;left:40px;height:1px;width:${W - 80}px"></div>
+     <div class="wm" style="--c:${BOOKS[1].c};left:60px;top:40px">A Question<br>of Precedence<small>Book 1 &middot; Marco da Cola</small></div>
+     <div class="wm" style="--c:${BOOKS[2].c};right:60px;top:40px;text-align:right">The Great Trust<small>Book 2 &middot; Jack Prestcott</small></div>
+     <div class="wm" style="--c:${BOOKS[3].c};right:60px;bottom:40px;text-align:right">The Character<br>of Compliance<small>Book 3 &middot; John Wallis</small></div>
+     <div class="wm" style="--c:${BOOKS[4].c};left:60px;bottom:40px">An Instance<br>of the Fingerpost<small>Book 4 &middot; Anthony Wood</small></div>`);
+}
+let W = 0, H = 0;
+
+/* ---------- edges ---------- */
+function clip(n, tx, ty) {
+  const dx = tx - n.cx, dy = ty - n.cy, hw = n.w / 2 + 4, hh = n.h / 2 + 4;
+  const s = Math.min(hw / Math.abs(dx || 1e-9), hh / Math.abs(dy || 1e-9));
+  return [n.cx + dx * Math.min(s, 1), n.cy + dy * Math.min(s, 1)];
+}
+function drawEdges() {
+  const NS = "http://www.w3.org/2000/svg";
+  svg.innerHTML = "";
+  rels.forEach((r, ri) => {
+    const a = byId[r.a], b = byId[r.b];
+    const [x1, y1] = clip(a, b.cx, b.cy), [x2, y2] = clip(b, a.cx, a.cy);
+    const len = Math.hypot(x2 - x1, y2 - y1) || 1, nx = -(y2 - y1) / len, ny = (x2 - x1) / len;
+    const g = document.createElementNS(NS, "g"); g.dataset.r = ri;
+    r.books.forEach((bk, k) => {
+      const off = (k - (r.books.length - 1) / 2) * 3.4;
+      const l = document.createElementNS(NS, "line");
+      l.setAttribute("class", "s"); l.dataset.b = bk;
+      l.setAttribute("x1", x1 + nx * off); l.setAttribute("y1", y1 + ny * off); l.setAttribute("x2", x2 + nx * off); l.setAttribute("y2", y2 + ny * off);
+      l.setAttribute("stroke", getComputedStyle(document.documentElement).getPropertyValue("--b" + bk).trim());
+      g.appendChild(l);
+    });
+    const hit = document.createElementNS(NS, "line");
+    hit.setAttribute("class", "hit"); hit.dataset.edge = ri;
+    hit.setAttribute("x1", x1); hit.setAttribute("y1", y1); hit.setAttribute("x2", x2); hit.setAttribute("y2", y2);
+    g.appendChild(hit);
+    const t = document.createElementNS(NS, "text");
+    t.setAttribute("class", "lbl"); t.setAttribute("text-anchor", "middle");
+    t.setAttribute("x", (x1 + x2) / 2); t.setAttribute("y", (y1 + y2) / 2 - 5); t.textContent = r.ev ? r.l : sentence(r);
+    g.appendChild(t);
+    svg.appendChild(g); r.g = g;
+  });
+}
+
+/* ---------- filtering & selection ---------- */
+function applyFilter() {
+  // Cards keep their size: hidden entries leave their space, so the connection lines stay attached.
+  document.querySelectorAll(".card .fact").forEach(el => { el.parentElement.style.visibility = on[el.dataset.b] ? "" : "hidden"; });
+  for (const r of rels) {
+    let any = false;
+    r.g.querySelectorAll("line.s").forEach(l => { const v = on[l.dataset.b]; l.style.display = v ? "" : "none"; any = any || v; });
+    r.g.style.display = any ? "" : "none";
+  }
+  for (const n of nodes) {
+    const vis = n.facts.some(f => on[f.b]) || (n.narrator && on[n.narrator]);
+    n.el.classList.toggle("off", !vis);
+  }
+  if (selected) renderPanel(selected);
+}
+function neighbours(id) { const s = new Set([id]); rels.forEach(r => { if (r.a === id) s.add(r.b); if (r.b === id) s.add(r.a); }); return s; }
+function select(id, pan) {
+  selected = id;
+  const nb = id ? neighbours(id) : null;
+  for (const n of nodes) { n.el.classList.toggle("sel", n.id === id); n.el.classList.toggle("dim", !!id && !nb.has(n.id)); }
+  for (const r of rels) { const mine = id && (r.a === id || r.b === id); r.g.classList.toggle("on", !!mine); r.g.classList.toggle("dim", !!id && !mine); }
+  if (id) { renderPanel(id); if (pan) centerOn(byId[id]); } else $("#panel").hidden = true;
+}
+function renderPanel(id) {
+  const n = byId[id], P = $("#panel");
+  const groups = [1, 2, 3, 4].map(b => {
+    const fs = n.factIdx.filter(i => FACTS[i].b === b && on[b]);
+    if (!fs.length) return "";
+    return `<div class="grp"><h4 style="--c:${BOOKS[b].c}">${b} &middot; ${BOOKS[b].narr} says</h4><ul class="facts" style="border:0;padding:0;margin:0">${fs.map(i => factButton(FACTS[i], i)).join("")}</ul></div>`;
+  }).join("");
+  const myRels = rels.filter(r => r.a === id || r.b === id).filter(r => r.books.some(b => on[b]));
+  const relHtml = myRels.map(r => {
+    const other = byId[r.a === id ? r.b : r.a];
+    return `<div class="rel"><button type="button" class="who" data-sel="${other.id}">${esc(other.name)}</button><div class="lb">${esc(sentence(r))}</div>
+      <ul class="facts" style="border:0;padding:0;margin:4px 0 0">${r.factIdx.filter(i => on[FACTS[i].b]).map(i => factButton(FACTS[i], i)).join("")}</ul></div>`;
+  }).join("");
+  const bars = n.mentions ? (() => {
+    const max = Math.max(1, ...n.mentions);
+    return `<h3>Named in each narrative</h3><div class="bars">${[1, 2, 3, 4].map(b => `<span style="color:${BOOKS[b].c};font-weight:700">${b}</span><div class="tr" style="--c:${BOOKS[b].c}"><div style="width:${n.narrator === b ? 100 : n.mentions[b - 1] / max * 100}%"></div></div><span>${n.narrator === b ? "narrator" : n.mentions[b - 1]}</span>`).join("")}</div>`;
+  })() : "";
+  P.innerHTML = `<button type="button" class="btn icon x" data-close="panel" aria-label="Close">&times;</button>
+    <h2>${esc(n.name)}</h2><div class="sub">${n.aka ? esc(n.aka) + " &middot; " : ""}${esc(n.role)}</div>
+    ${bars}
+    <h3>What each narrator tells us</h3>${groups || '<p class="sub">Nothing in the books shown.</p>'}
+    <h3>Connections (${myRels.length})</h3>${relHtml || '<p class="sub">None in the books shown.</p>'}
+    <p class="note">Mention counts come from matching names and forms of address in the parsed text, so treat them as approximate. Narrators refer to themselves as I.</p>`;
+  P.hidden = false; P.scrollTop = 0;
+}
+
+/* ---------- popover ---------- */
+let popState = null, popPinned = false, hoverTimer = 0, hideTimer = 0;
+function locText(f) { return f.r ? `chapter ${f.r.c}, paragraph ${f.r.p}` : "location not found"; }
+function ownerText(f) {
+  if (f.node) return byId[f.node].name;
+  const r = rels[f.rel]; return `${byId[r.a].name} ↔ ${byId[r.b].name}`;
+}
+function renderPop() {
+  const P = $("#pop");
+  let html = `<button type="button" class="x" data-close="pop" aria-label="Close">&times;</button>`;
+  if (popState.edge != null) {
+    const r = rels[popState.edge];
+    html += `<div class="ehead">${esc(byId[r.a].name)} &harr; ${esc(byId[r.b].name)}</div><div class="loc" style="font-style:italic">${esc(sentence(r))}</div>
+      <ul class="facts elist" style="border:0;padding:0">${r.factIdx.filter(i => on[FACTS[i].b]).map(i => factButton(FACTS[i], i)).join("")}</ul>`;
+  } else {
+    const f = FACTS[popState.f], B = BOOKS[f.b];
+    if (popState.from != null) html += `<button type="button" class="back" data-back="1">&larr; back to the connection</button>`;
+    const text = f.r && paras[f.r.h];
+    html += `<div class="hd"><span class="chip" style="--c:${B.c}"><span class="sw">${f.b}</span>${B.narr}, <i>${B.title}</i></span></div>
+      <div class="loc">${locText(f)}</div>
+      <div class="who">${esc(ownerText(f))}</div>
+      <div class="claim" style="--c:${B.c}">${esc(f.t)}</div>
+      ${text ? `<div class="src" style="--c:${B.c}">${esc(text)}</div>`
+             : `<div class="src none">${Object.keys(paras).length ? "This paragraph was not found in the file you opened." : "Open your copy of the book (the ch1.xhtml or the .epub) and the original paragraph appears here. It is read from your file, in your browser, and remembered on this device."}<br><button type="button" class="btn load" data-load="1">Open your book file</button></div>`}`;
+  }
+  P.innerHTML = html;
+}
+function placePop(anchor) {
+  const P = $("#pop"); P.hidden = false;
+  const r = anchor.getBoundingClientRect(), pw = P.offsetWidth, ph = P.offsetHeight, vw = innerWidth, vh = innerHeight;
+  let x = r.right + 10, y = r.top - 6;
+  if (x + pw > vw - 10) x = r.left - pw - 10;
+  if (x < 10) { x = Math.min(Math.max(10, r.left), vw - pw - 10); y = r.bottom + 8; if (y + ph > vh - 10) y = r.top - ph - 8; }
+  y = Math.min(Math.max(10, y), vh - ph - 10);
+  P.style.left = x + "px"; P.style.top = y + "px";
+}
+let curFactEl = null;
+function openFact(i, anchor, pin, from) {
+  popState = { f: i, from }; popPinned = pin; renderPop(); placePop(anchor);
+  if (curFactEl) curFactEl.classList.remove("cur"); curFactEl = anchor.classList.contains("fact") ? anchor : null; if (curFactEl) curFactEl.classList.add("cur");
+}
+function openEdge(ri, anchor, pin, pt) {
+  popState = { edge: ri }; popPinned = pin; renderPop();
+  const P = $("#pop"); P.hidden = false;
+  const pw = P.offsetWidth, ph = P.offsetHeight;
+  P.style.left = Math.min(Math.max(10, pt.x + 14), innerWidth - pw - 10) + "px";
+  P.style.top = Math.min(Math.max(10, pt.y + 14), innerHeight - ph - 10) + "px";
+}
+function closePop() { $("#pop").hidden = true; popState = null; popPinned = false; if (curFactEl) curFactEl.classList.remove("cur"); curFactEl = null; rels.forEach(r => r.g.classList.remove("hover")); }
+
+/* clicks anywhere */
+document.addEventListener("click", e => {
+  const t = e.target;
+  if (t.closest("[data-close=pop]")) return closePop();
+  if (t.closest("[data-close=panel]")) return select(null);
+  if (t.closest("[data-load]")) return $("#file").click();
+  if (t.closest("[data-back]")) { const ri = popState.from; popState = { edge: ri }; popPinned = true; renderPop(); return; }
+  const fb = t.closest(".fact");
+  if (fb) { const inPop = !!fb.closest("#pop"); openFact(+fb.dataset.f, inPop ? $("#pop") : fb, true, inPop && popState && popState.edge != null ? popState.edge : undefined); if (inPop) placePopKeep(); return; }
+  const sb = t.closest("[data-sel]");
+  if (sb && !moved) { select(sb.dataset.sel, !!sb.closest("#panel")); return; }
+  if (!t.closest("#pop") && popPinned && !t.closest(".hit")) closePop();
+});
+function placePopKeep() { /* popover content replaced in place; keep its position on screen */ const P = $("#pop"); const r = P.getBoundingClientRect(); P.style.top = Math.min(r.top, innerHeight - P.offsetHeight - 10) + "px"; }
+$("#loadBtn").addEventListener("click", () => $("#file").click());
+$("#file").addEventListener("change", e => { const f = e.target.files[0]; if (f) loadFile(f); e.target.value = ""; });
+
+/* hover previews on devices with a mouse */
+const canHover = matchMedia("(hover: hover)").matches;
+if (canHover) {
+  document.addEventListener("pointerover", e => {
+    if (popPinned || panning) return;
+    const fb = e.target.closest(".fact");
+    if (fb && !fb.closest("#pop")) { clearTimeout(hideTimer); clearTimeout(hoverTimer); hoverTimer = setTimeout(() => openFact(+fb.dataset.f, fb, false), 260); return; }
+    const hit = e.target.closest(".hit");
+    if (hit) { clearTimeout(hideTimer); clearTimeout(hoverTimer); const ri = +hit.dataset.edge; rels.forEach(r => r.g.classList.toggle("hover", r === rels[ri])); const pt = { x: e.clientX, y: e.clientY }; hoverTimer = setTimeout(() => openEdge(ri, hit, false, pt), 200); return; }
+    if (e.target.closest("#pop")) { clearTimeout(hideTimer); return; }
+  });
+  document.addEventListener("pointerout", e => {
+    if (popPinned) return;
+    if (e.target.closest(".fact, .hit, #pop")) { clearTimeout(hoverTimer); hideTimer = setTimeout(() => { if (!popPinned) closePop(); }, 180); }
+  });
+}
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") { if (!$("#pop").hidden) closePop(); else select(null); }
+  if (e.target.closest("input, select")) return;
+  if (e.key === "+" || e.key === "=") zoomBy(1.25);
+  if (e.key === "-" || e.key === "_") zoomBy(0.8);
+  if (e.key === "0") fit();
+});
+
+/* ---------- pan & zoom ---------- */
+let S = 1, TX = 0, TY = 0, panning = false, moved = false;
+const pointers = new Map(); let start = null;
+function apply() { world.style.transform = `translate(${TX}px,${TY}px) scale(${S})`; }
+function zoomAt(f, cx, cy) { const ns = Math.min(2.2, Math.max(0.08, S * f)); f = ns / S; TX = cx - (cx - TX) * f; TY = cy - (cy - TY) * f; S = ns; apply(); }
+function zoomBy(f) { const r = viewport.getBoundingClientRect(); zoomAt(f, r.width / 2, r.height / 2); }
+function fit() { const r = viewport.getBoundingClientRect(); S = Math.min(r.width / W, r.height / H) * 0.98; TX = (r.width - W * S) / 2; TY = (r.height - H * S) / 2; apply(); }
+function centerOn(n) { const r = viewport.getBoundingClientRect(); const panelW = $("#panel").hidden || innerWidth <= 760 ? 0 : $("#panel").offsetWidth; S = Math.max(S, 0.85); TX = (r.width - panelW) / 2 - n.cx * S; TY = (innerWidth <= 760 ? r.height * 0.21 : r.height / 2) - n.cy * S; apply(); }
+$("#zin").addEventListener("click", () => zoomBy(1.25));
+$("#zout").addEventListener("click", () => zoomBy(0.8));
+$("#fit").addEventListener("click", fit);
+viewport.addEventListener("wheel", e => {
+  if (e.target.closest("#panel")) return;
+  e.preventDefault();
+  const r = viewport.getBoundingClientRect(), cx = e.clientX - r.left, cy = e.clientY - r.top;
+  const mouseWheel = e.deltaMode === 1 || (e.deltaX === 0 && Math.abs(e.deltaY) >= 40 && Number.isInteger(e.deltaY));
+  if (e.ctrlKey || mouseWheel) zoomAt(Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0018)), cx, cy);
+  else { TX -= e.deltaX; TY -= e.deltaY; apply(); }
+}, { passive: false });
+viewport.addEventListener("pointerdown", e => {
+  if (e.target.closest("#panel") || e.button > 0) return;
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (pointers.size === 1) { start = { x: e.clientX, y: e.clientY, tx: TX, ty: TY }; moved = false; }
+  if (pointers.size === 2) { const [a, b] = [...pointers.values()]; start = { d: Math.hypot(a.x - b.x, a.y - b.y), s: S, mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2, tx: TX, ty: TY }; moved = true; }
+});
+window.addEventListener("pointermove", e => {
+  if (!pointers.has(e.pointerId)) return;
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  const r = viewport.getBoundingClientRect();
+  if (pointers.size === 1 && start && start.d == null) {
+    const dx = e.clientX - start.x, dy = e.clientY - start.y;
+    if (!moved && Math.hypot(dx, dy) > 5) { moved = true; panning = true; viewport.classList.add("panning"); closePopIfHover(); }
+    if (moved) { TX = start.tx + dx; TY = start.ty + dy; apply(); }
+  } else if (pointers.size === 2 && start && start.d) {
+    const [a, b] = [...pointers.values()], d = Math.hypot(a.x - b.x, a.y - b.y);
+    const ns = Math.min(2.2, Math.max(0.08, start.s * d / start.d)), mx = (a.x + b.x) / 2 - r.left, my = (a.y + b.y) / 2 - r.top;
+    const f = ns / start.s; TX = mx - (start.mx - r.left - start.tx) * f; TY = my - (start.my - r.top - start.ty) * f; S = ns; apply();
+  }
+});
+function endPointer(e) {
+  if (!pointers.has(e.pointerId)) return;
+  pointers.delete(e.pointerId);
+  if (pointers.size === 0) {
+    if (!moved) tapAt(e);
+    panning = false; viewport.classList.remove("panning"); start = null;
+    setTimeout(() => { moved = false; }, 0);
+  } else if (pointers.size === 1) { const [p] = [...pointers.values()]; start = { x: p.x, y: p.y, tx: TX, ty: TY }; }
+}
+window.addEventListener("pointerup", endPointer);
+window.addEventListener("pointercancel", endPointer);
+function closePopIfHover() { if (!popPinned) closePop(); }
+function tapAt(e) {
+  const t = e.target;
+  if (t.closest("button, a, select, #pop")) return;           // handled by click
+  const hit = t.closest(".hit");
+  if (hit) { const ri = +hit.dataset.edge; rels.forEach(r => r.g.classList.toggle("hover", r === rels[ri])); openEdge(ri, hit, true, { x: e.clientX, y: e.clientY }); return; }
+  const card = t.closest(".card");
+  if (card) { select(card.dataset.id); return; }
+  if (!popPinned) select(null);
+}
+
+/* drag-and-drop the book file */
+let dragDepth = 0;
+window.addEventListener("dragenter", e => { if ([...e.dataTransfer.types].includes("Files")) { dragDepth++; $("#drop").hidden = false; e.preventDefault(); } });
+window.addEventListener("dragover", e => { if (!$("#drop").hidden) e.preventDefault(); });
+window.addEventListener("dragleave", () => { if (--dragDepth <= 0) { dragDepth = 0; $("#drop").hidden = true; } });
+window.addEventListener("drop", e => { e.preventDefault(); dragDepth = 0; $("#drop").hidden = true; const f = e.dataTransfer.files[0]; if (f) loadFile(f); });
+
+let toastTimer = 0;
+function toast(msg) { const T = $("#toast"); T.textContent = msg; T.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => T.hidden = true, 4200); }
+
+/* ---------- start ---------- */
+function boot() { layout(); drawEdges(); applyFilter(); markLoaded(); fit(); }
+(document.fonts && document.fonts.ready ? Promise.race([document.fonts.ready, new Promise(r => setTimeout(r, 1500))]) : Promise.resolve()).then(boot);
+let rT = 0; addEventListener("resize", () => { clearTimeout(rT); rT = setTimeout(fit, 150); });
+</script>
+</body>
+</html>
