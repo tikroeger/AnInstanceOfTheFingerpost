@@ -59,6 +59,9 @@ button { font: inherit; color: inherit; }
 .book span.t { display: block; color: var(--muted); font-style: italic; font-size: 11.5px; }
 .book[aria-pressed="false"] { opacity: .42; }
 .book[aria-pressed="false"] .sw { background: transparent; color: var(--c); border: 1.5px dashed var(--c); }
+/* a hidden book shows only its number: no narrator or title, to avoid spoilers */
+.book[aria-pressed="false"] { padding: 5px 7px; }
+.book[aria-pressed="false"] > span:not(.sw) { display: none; }
 .tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-left: auto; }
 .tools select, .btn {
   height: 32px; border: 1px solid var(--rule); border-radius: 4px; background: var(--sheet);
@@ -85,6 +88,8 @@ button { font: inherit; color: inherit; }
 .axis { position: absolute; background: var(--rule); opacity: .7; }
 .wm { position: absolute; font-family: var(--display); font-style: italic; color: var(--c); opacity: .2; font-size: 118px; line-height: .95; white-space: nowrap; pointer-events: none; }
 .wm small { display: block; font-style: normal; font-size: 40px; margin-top: 10px; }
+.wm .short, .wm.off .full { display: none; }
+.wm.off .short { display: inline; }
 
 .card {
   position: absolute; background: var(--sheet); border: 1px solid var(--rule); border-radius: 3px;
@@ -97,6 +102,8 @@ button { font: inherit; color: inherit; }
 .card.sel { box-shadow: 0 0 0 3px var(--mark), 0 0 0 4px var(--ink); }
 .card.dim { opacity: .22; }
 .card.off { opacity: .3; }
+/* a person who appears only in hidden books is an empty placeholder: no name or role to spoil */
+.card.off > :not(.facts) { visibility: hidden; }
 .card .nm {
   display: block; width: 100%; text-align: left; background: none; border: 0; padding: 0; cursor: pointer;
   font-family: var(--display); font-size: 18px; line-height: 1.12; text-wrap: balance;
@@ -209,13 +216,19 @@ const BOOKS = {
   4: { narr: "Anthony Wood", title: "An Instance of the Fingerpost", c: "var(--b4)" },
 };
 const GROUPS = { narrator: "Narrators", blundy: "The Blundys", event: "Plot questions", oxford: "Oxford", venice: "The Colas", prestcott: "The Prestcott affair", court: "Court and government", wallis: "Wallis's network", wood: "Wood's circle" };
+/* Spoiler guards: an alias is shown only once the book that reveals it is on (default: the
+   first book the person appears in); a narrator whose book is off is listed with their circle. */
+const AKA_BOOK = { cola: 4, marco: 4 };
+const NARR_GROUP = { cola: "venice", prestcott: "prestcott", wallis: "wallis", wood: "wood" };
+const akaShown = n => !!n.aka && on[AKA_BOOK[n.id] ?? Math.min(...n.facts.map(f => f.b))];
+const narrShown = n => !!n.narrator && on[n.narrator];
 const STORE = "fingerpost-paragraphs-v1";
 const $ = (s, el = document) => el.querySelector(s);
 const sentence = r => r.ev ? `${byId[r.a].short}: ${r.l}` : `${byId[r.a].short} ${r.l} ${byId[r.b].short}`;
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
 /* ---------- state ---------- */
-const on = { 1: true, 2: true, 3: true, 4: true };
+const on = { 1: true, 2: false, 3: false, 4: false };   // start with Book 1 only, so later books stay unspoiled
 const nodes = DATA.nodes, rels = DATA.rels;
 const byId = Object.fromEntries(nodes.map(n => [n.id, n]));
 const FACTS = [];          // every clickable piece: {b,t,r,node?,rel?}
@@ -301,7 +314,7 @@ function factButton(f, i) {
 }
 function namedLine(n) {
   if (!n.mentions) return "";
-  const cells = [1, 2, 3, 4].map(b => `<i style="color:${BOOKS[b].c}" title="Book ${b}: ${n.narrator === b ? "narrator (writes as I)" : n.mentions[b - 1] + " mentions by name"}">${n.narrator === b ? "I" : n.mentions[b - 1]}</i>`).join("");
+  const cells = [1, 2, 3, 4].map(b => `<i${n.narrator === b ? ' class="me"' : ""} style="color:${BOOKS[b].c}" title="Book ${b}: ${n.narrator === b ? "narrator (writes as I)" : n.mentions[b - 1] + " mentions by name"}">${n.narrator === b ? "I" : n.mentions[b - 1]}</i>`).join("");
   return `<div class="named" title="How often each narrative names this person (approximate)">named ${cells}</div>`;
 }
 for (const n of nodes) {
@@ -311,7 +324,7 @@ for (const n of nodes) {
   el.dataset.id = n.id;
   if (n.narrator) el.style.setProperty("--c", BOOKS[n.narrator].c);
   el.innerHTML = `<button type="button" class="nm" data-sel="${n.id}">${esc(n.name)}${n.aka ? ` <span class="aka">${esc(n.aka)}</span>` : ""}</button>
-    <span class="role">${esc(n.role)}</span>
+    <span class="role${n.narrator ? " nrole" : ""}">${esc(n.role)}</span>
     ${n.narrator ? `<span class="nar">Tells Book ${n.narrator}</span>` : ""}
     ${namedLine(n)}
     <ul class="facts">${n.factIdx.map(i => factButton(FACTS[i], i)).join("")}</ul>`;
@@ -324,16 +337,20 @@ rels.forEach((r, ri) => { r.factIdx = r.c.map(f => { FACTS.push({ ...f, rel: ri 
 const booksEl = $("#books");
 for (const b of [1, 2, 3, 4]) {
   const B = BOOKS[b], btn = document.createElement("button");
-  btn.type = "button"; btn.className = "book"; btn.setAttribute("aria-pressed", "true"); btn.style.setProperty("--c", B.c); btn.dataset.b = b;
+  btn.type = "button"; btn.className = "book"; btn.setAttribute("aria-pressed", on[b]); btn.title = `Book ${b}`; btn.style.setProperty("--c", B.c); btn.dataset.b = b;
   btn.innerHTML = `<span class="sw">${b}</span><span><b>${B.narr}</b><span class="t">${B.title}</span></span>`;
   btn.addEventListener("click", () => { on[b] = !on[b]; btn.setAttribute("aria-pressed", on[b]); applyFilter(); });
   booksEl.appendChild(btn);
 }
 const jump = $("#jump");
-for (const [g, label] of Object.entries(GROUPS)) {
-  const og = document.createElement("optgroup"); og.label = label;
-  nodes.filter(n => n.group === g).sort((a, b) => a.name.localeCompare(b.name)).forEach(n => { const o = document.createElement("option"); o.value = n.id; o.textContent = n.name + (n.aka ? ` (${n.aka})` : ""); og.appendChild(o); });
-  if (og.children.length) jump.appendChild(og);
+function buildJump() {
+  jump.length = 1; jump.querySelectorAll("optgroup").forEach(og => og.remove());
+  const groupOf = n => n.narrator && !narrShown(n) ? NARR_GROUP[n.id] : n.group;
+  for (const [g, label] of Object.entries(GROUPS)) {
+    const og = document.createElement("optgroup"); og.label = label;
+    nodes.filter(n => groupOf(n) === g && !n.el.classList.contains("off")).sort((a, b) => a.name.localeCompare(b.name)).forEach(n => { const o = document.createElement("option"); o.value = n.id; o.textContent = n.name + (akaShown(n) ? ` (${n.aka})` : ""); og.appendChild(o); });
+    if (og.children.length) jump.appendChild(og);
+  }
 }
 jump.addEventListener("change", () => { if (jump.value) { select(jump.value, true); jump.value = ""; } });
 
@@ -369,10 +386,10 @@ function layout() {
   world.insertAdjacentHTML("afterbegin",
     `<div class="axis" style="left:${X}px;top:40px;width:1px;height:${H - 80}px"></div>
      <div class="axis" style="top:${Y}px;left:40px;height:1px;width:${W - 80}px"></div>
-     <div class="wm" style="--c:${BOOKS[1].c};left:60px;top:40px">A Question<br>of Precedence<small>Book 1 &middot; Marco da Cola</small></div>
-     <div class="wm" style="--c:${BOOKS[2].c};right:60px;top:40px;text-align:right">The Great Trust<small>Book 2 &middot; Jack Prestcott</small></div>
-     <div class="wm" style="--c:${BOOKS[3].c};right:60px;bottom:40px;text-align:right">The Character<br>of Compliance<small>Book 3 &middot; John Wallis</small></div>
-     <div class="wm" style="--c:${BOOKS[4].c};left:60px;bottom:40px">An Instance<br>of the Fingerpost<small>Book 4 &middot; Anthony Wood</small></div>`);
+     <div class="wm" data-b="1" style="--c:${BOOKS[1].c};left:60px;top:40px"><span class="full">A Question<br>of Precedence<small>Book 1 &middot; Marco da Cola</small></span><span class="short">Book 1</span></div>
+     <div class="wm" data-b="2" style="--c:${BOOKS[2].c};right:60px;top:40px;text-align:right"><span class="full">The Great Trust<small>Book 2 &middot; Jack Prestcott</small></span><span class="short">Book 2</span></div>
+     <div class="wm" data-b="3" style="--c:${BOOKS[3].c};right:60px;bottom:40px;text-align:right"><span class="full">The Character<br>of Compliance<small>Book 3 &middot; John Wallis</small></span><span class="short">Book 3</span></div>
+     <div class="wm" data-b="4" style="--c:${BOOKS[4].c};left:60px;bottom:40px"><span class="full">An Instance<br>of the Fingerpost<small>Book 4 &middot; Anthony Wood</small></span><span class="short">Book 4</span></div>`);
 }
 let W = 0, H = 0;
 
@@ -422,8 +439,20 @@ function applyFilter() {
   for (const n of nodes) {
     const vis = n.facts.some(f => on[f.b]) || (n.narrator && on[n.narrator]);
     n.el.classList.toggle("off", !vis);
+    // spoiler guards; visibility (not display) so cards keep the size the layout measured
+    const aka = n.el.querySelector(".aka"); if (aka) aka.style.visibility = akaShown(n) ? "" : "hidden";
+    if (n.narrator) {
+      const s = narrShown(n);
+      n.el.classList.toggle("narrator", s);
+      n.el.querySelectorAll(".nrole, .nar").forEach(el => el.style.visibility = s ? "" : "hidden");
+      const me = n.el.querySelector(".named .me");
+      if (me) { me.textContent = s ? "I" : "–"; me.title = s ? `Book ${n.narrator}: narrator (writes as I)` : `Book ${n.narrator}: hidden`; }
+    }
   }
-  if (selected) renderPanel(selected);
+  document.querySelectorAll(".wm[data-b]").forEach(el => el.classList.toggle("off", !on[el.dataset.b]));
+  buildJump();
+  if (selected && byId[selected].el.classList.contains("off")) select(null);
+  else if (selected) renderPanel(selected);
 }
 function neighbours(id) { const s = new Set([id]); rels.forEach(r => { if (r.a === id) s.add(r.b); if (r.b === id) s.add(r.a); }); return s; }
 function select(id, pan) {
@@ -448,10 +477,10 @@ function renderPanel(id) {
   }).join("");
   const bars = n.mentions ? (() => {
     const max = Math.max(1, ...n.mentions);
-    return `<h3>Named in each narrative</h3><div class="bars">${[1, 2, 3, 4].map(b => `<span style="color:${BOOKS[b].c};font-weight:700">${b}</span><div class="tr" style="--c:${BOOKS[b].c}"><div style="width:${n.narrator === b ? 100 : n.mentions[b - 1] / max * 100}%"></div></div><span>${n.narrator === b ? "narrator" : n.mentions[b - 1]}</span>`).join("")}</div>`;
+    return `<h3>Named in each narrative</h3><div class="bars">${[1, 2, 3, 4].map(b => `<span style="color:${BOOKS[b].c};font-weight:700">${b}</span><div class="tr" style="--c:${BOOKS[b].c}"><div style="width:${n.narrator !== b ? n.mentions[b - 1] / max * 100 : on[b] ? 100 : 0}%"></div></div><span>${n.narrator !== b ? n.mentions[b - 1] : on[b] ? "narrator" : "–"}</span>`).join("")}</div>`;
   })() : "";
   P.innerHTML = `<button type="button" class="btn icon x" data-close="panel" aria-label="Close">&times;</button>
-    <h2>${esc(n.name)}</h2><div class="sub">${n.aka ? esc(n.aka) + " &middot; " : ""}${esc(n.role)}</div>
+    <h2>${esc(n.name)}</h2><div class="sub">${[akaShown(n) && esc(n.aka), (!n.narrator || narrShown(n)) && esc(n.role)].filter(Boolean).join(" &middot; ")}</div>
     ${bars}
     <h3>What each narrator tells us</h3>${groups || '<p class="sub">Nothing in the books shown.</p>'}
     <h3>Connections (${myRels.length})</h3>${relHtml || '<p class="sub">None in the books shown.</p>'}
@@ -607,7 +636,7 @@ function tapAt(e) {
   const hit = t.closest(".hit");
   if (hit) { const ri = +hit.dataset.edge; rels.forEach(r => r.g.classList.toggle("hover", r === rels[ri])); openEdge(ri, hit, true, { x: e.clientX, y: e.clientY }); return; }
   const card = t.closest(".card");
-  if (card) { select(card.dataset.id); return; }
+  if (card) { if (!card.classList.contains("off")) select(card.dataset.id); return; }
   if (!popPinned) select(null);
 }
 
